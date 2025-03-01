@@ -9,5 +9,5 @@ repository = "https://github.com/roberte777/zesh"
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }
 thiserror = "1.0"
-zellij = { path = "../zellij" }
-zoxide = { path = "../zoxide" }
+zellij_rs = { path = "../zellij_rs", version = "0.1.0"}
+zox_rs = { path = "../zox_rs", version = "0.1.0"}

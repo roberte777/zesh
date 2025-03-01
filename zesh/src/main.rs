@@ -4,8 +4,8 @@ use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use zellij::{ZellijClient, ZellijOperations};
-use zoxide::{ZoxideClient, ZoxideOperations};
+use zellij_rs::{ZellijClient, ZellijOperations};
+use zox_rs::{ZoxideClient, ZoxideOperations};
 
 /// Zesh - A zellij session manager with zoxide integration
 #[derive(Parser)]

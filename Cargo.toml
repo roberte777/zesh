@@ -1,6 +1,7 @@
 [workspace]
-members = [ "zellij",
+members = [
+    "zellij_rs",
     "zesh",
-    "zoxide",
+    "zox_rs",
 ]
 resolver = "2"
