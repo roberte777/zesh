@@ -2,6 +2,8 @@
 name = "zesh"
 version = "0.1.0"
 edition = "2024"
+license = "LICENSE.md"
+description = "A zellij session manager with zoxide integration, inspired by tmux sesh."
 
 [dependencies]
 clap = { version = "4.4", features = ["derive"] }
