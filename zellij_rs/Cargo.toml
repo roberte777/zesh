@@ -2,7 +2,7 @@
 name = "zellij_rs"
 version = "0.1.0"
 edition = "2024"
-license = "LICENSE.md"
+license = "MIT"
 description = "Support for zesh"
 repository = "https://github.com/roberte777/zesh/zellij_rs"
 

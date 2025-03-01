@@ -2,7 +2,7 @@
 name = "zesh"
 version = "0.1.0"
 edition = "2024"
-license = "LICENSE.md"
+license = "MIT"
 description = "A zellij session manager with zoxide integration, inspired by tmux sesh."
 repository = "https://github.com/roberte777/zesh/zesh"
 
