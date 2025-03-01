@@ -13,8 +13,8 @@ A zellij session manager with zoxide integration, inspired by tmux-sesh.
 
 ## Installation
 
-```
-cargo install --path .
+```bash
+cargo install --locked zesh
 ```
 
 ## Requirements
