@@ -74,7 +74,11 @@ impl ZoxideOperations for ZoxideClient {
     }
 
     fn list(&self) -> ZoxideResult<Vec<ZoxideEntry>> {
-        let output = Command::new("zoxide").arg("query").arg("--list").output()?;
+        let output = Command::new("zoxide")
+            .arg("query")
+            .arg("--list")
+            .arg("--score")
+            .output()?;
 
         if !output.status.success() {
             let error = String::from_utf8_lossy(&output.stderr);
