@@ -43,7 +43,7 @@ pub trait ZoxideOperations {
 }
 
 /// Default implementation that calls the real zoxide command
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct ZoxideClient;
 
 impl ZoxideClient {

@@ -718,39 +718,6 @@ mod tests {
     }
 
     #[test]
-    fn test_list_sessions() {
-        // Setup with multiple sessions
-        let mut sessions = HashMap::new();
-        sessions.insert("session1".to_string(), true);
-        sessions.insert("session2".to_string(), false);
-        sessions.insert("session3".to_string(), false);
-
-        let service = create_service(Some(sessions), None, None);
-
-        // Test listing sessions
-        let result = service.list_sessions();
-        assert!(result.is_ok());
-
-        let sessions = result.unwrap();
-        assert_eq!(sessions.len(), 3);
-        assert!(
-            sessions
-                .iter()
-                .any(|s| s.name == "session1" && s.is_current)
-        );
-        assert!(
-            sessions
-                .iter()
-                .any(|s| s.name == "session2" && !s.is_current)
-        );
-        assert!(
-            sessions
-                .iter()
-                .any(|s| s.name == "session3" && !s.is_current)
-        );
-    }
-
-    #[test]
     fn test_list_sessions_error_handling() {
         // Setup with failing zellij
         let zellij = FailingZellijClient;

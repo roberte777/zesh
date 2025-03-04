@@ -64,7 +64,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let zoxide = ZoxideClient::new();
     let fs = RealFs::new();
 
-    let connect_service = ConnectService::new(zellij.clone(), zoxide.clone(), fs.clone());
+    let connect_service = ConnectService::new(zellij, zoxide, fs);
 
     match &cli.command {
         Commands::List => {

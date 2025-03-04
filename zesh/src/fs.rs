@@ -59,7 +59,7 @@ pub trait FsOperations {
 }
 
 /// Default implementation that uses the standard filesystem
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct RealFs;
 
 impl RealFs {

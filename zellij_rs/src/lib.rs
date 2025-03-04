@@ -79,7 +79,7 @@ pub trait ZellijOperations {
 }
 
 /// Default implementation that calls the real zellij command
-#[derive(Clone)]
+#[derive(Copy, Clone)]
 pub struct ZellijClient;
 
 impl ZellijClient {
