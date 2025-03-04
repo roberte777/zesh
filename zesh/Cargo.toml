@@ -8,6 +8,7 @@ repository = "https://github.com/roberte777/zesh/zesh"
 readme="../README.md"
 
 [dependencies]
+anyhow = "1.0.97"
 clap = { version = "4.4", features = ["derive"] }
 thiserror = "1.0"
 zellij_rs = { path = "../zellij_rs", version = "0.1.0"}
