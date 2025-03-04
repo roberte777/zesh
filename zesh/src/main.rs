@@ -3,6 +3,8 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use zesh::connection::ConnectService;
+use zesh::fs::RealFs;
 
 use zellij_rs::{ZellijClient, ZellijOperations};
 use zox_rs::{ZoxideClient, ZoxideOperations};
@@ -60,6 +62,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     let zellij = ZellijClient::new();
     let zoxide = ZoxideClient::new();
+    let fs = RealFs::new();
+
+    let connect_service = ConnectService::new(zellij.clone(), zoxide.clone(), fs.clone());
 
     match &cli.command {
         Commands::List => {
@@ -87,65 +92,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             }
         }
         Commands::Connect { name } => {
-            // First check if it's an exact session name in zellij
-            let sessions = zellij.list_sessions()?;
-            let session_match = sessions.iter().find(|s| s.name == *name);
-
-            if let Some(session) = session_match {
-                zellij.attach_session(&session.name)?;
-                return Ok(());
-            }
-
-            // if not a zellij session, check if it is a path
-            if let Ok((path, name)) = dir_strategy(name) {
-                let session_match = sessions.iter().find(|s| s.name == *name);
-                if let Some(session) = session_match {
-                    zellij.attach_session(&session.name)?;
-                    zoxide.add(path)?;
-                    return Ok(());
-                } else {
-                    env::set_current_dir(&path)?;
-                    zellij.new_session(&name)?;
-                    zoxide.add(path)?;
-                    return Ok(());
+            // Use our new connect service
+            match connect_service.connect(name) {
+                Ok(()) => println!("Connected to '{}'", name),
+                Err(e) => {
+                    eprintln!("Error connecting to '{}': {}", name, e);
+                    return Err(e.into());
                 }
             }
-            // If not a session name, treat as path search
-            let entries = zoxide.query(&[name])?;
-
-            if entries.is_empty() {
-                println!("No matching sessions or directories found for '{}'", name);
-                return Ok(());
-            }
-
-            // Use the highest scored match
-            let best_match = &entries[0];
-            let path = &best_match.path;
-            let session_name = path
-                .file_name()
-                .and_then(|n| n.to_str())
-                .unwrap_or("zesh-session");
-
-            if sessions.iter().any(|s| s.name == *session_name) {
-                zellij.attach_session(session_name)?;
-                return Ok(());
-            }
-
-            // Create or attach to session with this path
-            println!(
-                "Creating new session '{}' at {}",
-                session_name,
-                path.display()
-            );
-
-            // Change to the directory
-            env::set_current_dir(path)?;
-
-            // Create new session
-            zellij.new_session(session_name)?;
-
-            // Add to zoxide database
-            zoxide.add(path)?;
         }
 
         Commands::Clone {
@@ -274,21 +228,4 @@ fn preview_directory(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
-}
-
-fn dir_strategy(name: &str) -> anyhow::Result<(PathBuf, String)> {
-    let path = PathBuf::from(name).canonicalize()?;
-    if !path.exists() {
-        return Err(anyhow::anyhow!("Path doesn't exist"));
-    }
-    if !path.is_dir() {
-        return Err(anyhow::anyhow!("Path is not a dir"));
-    }
-
-    let final_name = path.clone();
-    let final_name = final_name.file_name().and_then(|f| f.to_str());
-    match final_name {
-        Some(name) => Ok((path, name.to_string())),
-        None => Err(anyhow::anyhow!("No file name")),
-    }
 }

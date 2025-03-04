@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::io::Read;
 use std::process::{Command, Stdio};
 use std::str;
@@ -77,6 +79,7 @@ pub trait ZellijOperations {
 }
 
 /// Default implementation that calls the real zellij command
+#[derive(Clone)]
 pub struct ZellijClient;
 
 impl ZellijClient {
@@ -282,207 +285,206 @@ fn parse_tabs_json(_json: &str) -> ZellijResult<Vec<Tab>> {
     Ok(tabs)
 }
 
-#[cfg(test)]
-pub mod tests {
-    use super::*;
-    use std::cell::RefCell;
-    use std::collections::HashMap;
+/// A mock implementation of ZellijOperations for testing
+#[derive(Default)]
+pub struct MockZellijClient {
+    sessions: RefCell<HashMap<String, bool>>, // session_name -> is_current
+    tabs: RefCell<Vec<Tab>>,
+    current_session: RefCell<Option<String>>,
+}
 
-    /// A mock implementation of ZellijOperations for testing
-    #[derive(Default)]
-    pub struct MockZellijClient {
-        sessions: RefCell<HashMap<String, bool>>, // session_name -> is_current
-        tabs: RefCell<Vec<Tab>>,
-        current_session: RefCell<Option<String>>,
-    }
-
-    impl MockZellijClient {
-        pub fn new() -> Self {
-            Self {
-                sessions: RefCell::new(HashMap::new()),
-                tabs: RefCell::new(Vec::new()),
-                current_session: RefCell::new(None),
-            }
-        }
-
-        /// Preset sessions for testing
-        pub fn with_sessions(sessions: HashMap<String, bool>) -> Self {
-            let client = Self::new();
-            *client.sessions.borrow_mut() = sessions.clone();
-
-            // Set the first session that is current as the current session
-            for (name, is_current) in sessions.iter() {
-                if *is_current {
-                    *client.current_session.borrow_mut() = Some(name.clone());
-                    break;
-                }
-            }
-
-            client
-        }
-
-        /// Preset tabs for testing
-        pub fn with_tabs(tabs: Vec<Tab>) -> Self {
-            let client = Self::new();
-            *client.tabs.borrow_mut() = tabs;
-            client
+impl MockZellijClient {
+    pub fn new() -> Self {
+        Self {
+            sessions: RefCell::new(HashMap::new()),
+            tabs: RefCell::new(Vec::new()),
+            current_session: RefCell::new(None),
         }
     }
 
-    impl ZellijOperations for MockZellijClient {
-        fn list_sessions(&self) -> ZellijResult<Vec<Session>> {
-            let sessions = self.sessions.borrow();
-            let result = sessions
-                .iter()
-                .map(|(name, &is_current)| Session {
-                    name: name.clone(),
-                    is_current,
-                })
-                .collect();
+    /// Preset sessions for testing
+    pub fn with_sessions(sessions: HashMap<String, bool>) -> Self {
+        let client = Self::new();
+        *client.sessions.borrow_mut() = sessions.clone();
 
-            Ok(result)
+        // Set the first session that is current as the current session
+        for (name, is_current) in sessions.iter() {
+            if *is_current {
+                *client.current_session.borrow_mut() = Some(name.clone());
+                break;
+            }
         }
 
-        fn attach_session(&self, session_name: &str) -> ZellijResult<()> {
-            let mut sessions = self.sessions.borrow_mut();
+        client
+    }
 
-            if !sessions.contains_key(session_name) {
-                return Err(ZellijError::CommandExecution(format!(
-                    "Session '{}' not found",
-                    session_name
-                )));
-            }
+    /// Preset tabs for testing
+    pub fn with_tabs(tabs: Vec<Tab>) -> Self {
+        let client = Self::new();
+        *client.tabs.borrow_mut() = tabs;
+        client
+    }
+}
 
-            // Mark the current session as not current
-            if let Some(current_session) = self.current_session.borrow().as_ref() {
-                if let Some(session) = sessions.get_mut(current_session) {
-                    *session = false;
-                }
-            }
+impl ZellijOperations for MockZellijClient {
+    fn list_sessions(&self) -> ZellijResult<Vec<Session>> {
+        let sessions = self.sessions.borrow();
+        let result = sessions
+            .iter()
+            .map(|(name, &is_current)| Session {
+                name: name.clone(),
+                is_current,
+            })
+            .collect();
 
-            // Mark the new session as current
-            if let Some(session) = sessions.get_mut(session_name) {
-                *session = true;
-                *self.current_session.borrow_mut() = Some(session_name.to_string());
-            }
+        Ok(result)
+    }
 
-            Ok(())
+    fn attach_session(&self, session_name: &str) -> ZellijResult<()> {
+        let mut sessions = self.sessions.borrow_mut();
+
+        if !sessions.contains_key(session_name) {
+            return Err(ZellijError::CommandExecution(format!(
+                "Session '{}' not found",
+                session_name
+            )));
         }
 
-        fn new_session(&self, session_name: &str) -> ZellijResult<()> {
-            let mut sessions = self.sessions.borrow_mut();
-
-            // Mark the current session as not current
-            if let Some(current_session) = self.current_session.borrow().as_ref() {
-                if let Some(session) = sessions.get_mut(current_session) {
-                    *session = false;
-                }
+        // Mark the current session as not current
+        if let Some(current_session) = self.current_session.borrow().as_ref() {
+            if let Some(session) = sessions.get_mut(current_session) {
+                *session = false;
             }
+        }
 
-            // Add the new session and mark it as current
-            sessions.insert(session_name.to_string(), true);
+        // Mark the new session as current
+        if let Some(session) = sessions.get_mut(session_name) {
+            *session = true;
             *self.current_session.borrow_mut() = Some(session_name.to_string());
-
-            Ok(())
         }
 
-        fn kill_session(&self, session_name: &str) -> ZellijResult<()> {
-            let mut sessions = self.sessions.borrow_mut();
+        Ok(())
+    }
 
-            if !sessions.contains_key(session_name) {
-                return Err(ZellijError::CommandExecution(format!(
-                    "Session '{}' not found",
-                    session_name
-                )));
+    fn new_session(&self, session_name: &str) -> ZellijResult<()> {
+        let mut sessions = self.sessions.borrow_mut();
+
+        // Mark the current session as not current
+        if let Some(current_session) = self.current_session.borrow().as_ref() {
+            if let Some(session) = sessions.get_mut(current_session) {
+                *session = false;
             }
+        }
 
-            // Remove the session
-            sessions.remove(session_name);
+        // Add the new session and mark it as current
+        sessions.insert(session_name.to_string(), true);
+        *self.current_session.borrow_mut() = Some(session_name.to_string());
 
-            // If we removed the current session, set current_session to None
-            if let Some(current) = self.current_session.borrow().as_ref() {
-                if current == session_name {
-                    *self.current_session.borrow_mut() = None;
+        Ok(())
+    }
+
+    fn kill_session(&self, session_name: &str) -> ZellijResult<()> {
+        let mut sessions = self.sessions.borrow_mut();
+
+        if !sessions.contains_key(session_name) {
+            return Err(ZellijError::CommandExecution(format!(
+                "Session '{}' not found",
+                session_name
+            )));
+        }
+
+        // Remove the session
+        sessions.remove(session_name);
+
+        // If we removed the current session, set current_session to None
+        if let Some(current) = self.current_session.borrow().as_ref() {
+            if current == session_name {
+                *self.current_session.borrow_mut() = None;
+            }
+        }
+
+        Ok(())
+    }
+
+    fn list_tabs(&self) -> ZellijResult<Vec<Tab>> {
+        Ok(self.tabs.borrow().clone())
+    }
+
+    fn new_tab(&self, name: Option<&str>) -> ZellijResult<()> {
+        let mut tabs = self.tabs.borrow_mut();
+
+        // Set all existing tabs to not active
+        for tab in tabs.iter_mut() {
+            tab.is_active = false;
+        }
+
+        // Create a new tab and set it as active
+        let position = tabs.len() as u32;
+        tabs.push(Tab {
+            position,
+            name: name.map(String::from),
+            is_active: true,
+            panes: Vec::new(),
+        });
+
+        Ok(())
+    }
+
+    fn rename_tab(&self, name: &str) -> ZellijResult<()> {
+        let mut tabs = self.tabs.borrow_mut();
+
+        // Find the active tab and rename it
+        for tab in tabs.iter_mut() {
+            if tab.is_active {
+                tab.name = Some(name.to_string());
+                return Ok(());
+            }
+        }
+
+        Err(ZellijError::CommandExecution(
+            "No active tab found".to_string(),
+        ))
+    }
+
+    fn close_tab(&self) -> ZellijResult<()> {
+        let mut tabs = self.tabs.borrow_mut();
+
+        // Find the active tab
+        let active_index = tabs.iter().position(|tab| tab.is_active);
+
+        if let Some(index) = active_index {
+            // Remove the active tab
+            tabs.remove(index);
+
+            let tab_len = tabs.len();
+
+            // Update positions and set a new active tab if possible
+            for (i, tab) in tabs.iter_mut().enumerate() {
+                tab.position = i as u32;
+                if i == index.min(tab_len - 1) {
+                    tab.is_active = true;
                 }
             }
 
             Ok(())
-        }
-
-        fn list_tabs(&self) -> ZellijResult<Vec<Tab>> {
-            Ok(self.tabs.borrow().clone())
-        }
-
-        fn new_tab(&self, name: Option<&str>) -> ZellijResult<()> {
-            let mut tabs = self.tabs.borrow_mut();
-
-            // Set all existing tabs to not active
-            for tab in tabs.iter_mut() {
-                tab.is_active = false;
-            }
-
-            // Create a new tab and set it as active
-            let position = tabs.len() as u32;
-            tabs.push(Tab {
-                position,
-                name: name.map(String::from),
-                is_active: true,
-                panes: Vec::new(),
-            });
-
-            Ok(())
-        }
-
-        fn rename_tab(&self, name: &str) -> ZellijResult<()> {
-            let mut tabs = self.tabs.borrow_mut();
-
-            // Find the active tab and rename it
-            for tab in tabs.iter_mut() {
-                if tab.is_active {
-                    tab.name = Some(name.to_string());
-                    return Ok(());
-                }
-            }
-
+        } else {
             Err(ZellijError::CommandExecution(
                 "No active tab found".to_string(),
             ))
         }
-
-        fn close_tab(&self) -> ZellijResult<()> {
-            let mut tabs = self.tabs.borrow_mut();
-
-            // Find the active tab
-            let active_index = tabs.iter().position(|tab| tab.is_active);
-
-            if let Some(index) = active_index {
-                // Remove the active tab
-                tabs.remove(index);
-
-                let tab_len = tabs.len();
-
-                // Update positions and set a new active tab if possible
-                for (i, tab) in tabs.iter_mut().enumerate() {
-                    tab.position = i as u32;
-                    if i == index.min(tab_len - 1) {
-                        tab.is_active = true;
-                    }
-                }
-
-                Ok(())
-            } else {
-                Err(ZellijError::CommandExecution(
-                    "No active tab found".to_string(),
-                ))
-            }
-        }
-
-        fn run_command(&self, _command: &str, _args: &[&str]) -> ZellijResult<()> {
-            // In a mock, we don't actually run commands
-            // Just pretend it succeeded
-            Ok(())
-        }
     }
+
+    fn run_command(&self, _command: &str, _args: &[&str]) -> ZellijResult<()> {
+        // In a mock, we don't actually run commands
+        // Just pretend it succeeded
+        Ok(())
+    }
+}
+
+#[cfg(test)]
+pub mod tests {
+    use super::*;
+    use std::collections::HashMap;
 
     #[test]
     fn test_mock_zellij_sessions() {
