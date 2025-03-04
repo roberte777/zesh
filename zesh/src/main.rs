@@ -20,7 +20,11 @@ struct Cli {
 enum Commands {
     /// List sessions
     #[clap(visible_alias = "l")]
-    List,
+    List {
+        /// Include recent Zoxide directories
+        #[arg(short, long)]
+        all: bool,
+    },
 
     /// Connect to the given session
     #[clap(visible_alias = "cn")]
@@ -62,13 +66,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let zoxide = ZoxideClient::new();
 
     match &cli.command {
-        Commands::List => {
-            // List all directories from zoxide
-            let entries = zoxide.list()?;
-            println!("Recent directories:");
-            for entry in entries {
-                println!("{} {}", entry.score, entry.path.display());
+        Commands::List { all } => {
+            // Include recent Zoxide directories
+            if *all {
+                let entries = zoxide.list()?;
+
+                println!("Recent directories:");
+                for entry in entries {
+                    println!("{} {}", entry.score, entry.path.display());
+                }
             }
+
             // List active zellij sessions
             let sessions = zellij.list_sessions()?;
 
