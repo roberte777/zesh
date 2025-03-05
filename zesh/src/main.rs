@@ -93,12 +93,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
         Commands::Connect { name } => {
             // Use our new connect service
-            match connect_service.connect(name) {
-                Ok(()) => println!("Connected to '{}'", name),
-                Err(e) => {
-                    eprintln!("Error connecting to '{}': {}", name, e);
-                    return Err(e.into());
-                }
+            if let Err(e) = connect_service.connect(name) {
+                eprintln!("Error connecting to '{}': {}", name, e);
+                return Err(e.into());
             }
         }
 
