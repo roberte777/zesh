@@ -70,25 +70,18 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         Commands::List => {
             // List all directories from zoxide
             let entries = zoxide.list()?;
-            println!("Recent directories:");
             for entry in entries {
-                println!("{} {}", entry.score, entry.path.display());
+                println!("{}", entry.path.display());
             }
             // List active zellij sessions
             let sessions = zellij.list_sessions()?;
 
             if sessions.is_empty() {
-                println!("No active zellij sessions");
                 return Ok(());
             }
 
-            println!("Active zellij sessions:");
             for session in sessions {
-                println!(
-                    "{}{}",
-                    session.name,
-                    if session.is_current { " (current)" } else { "" }
-                );
+                println!("{}", session.name,);
             }
         }
         Commands::Connect { name } => {
