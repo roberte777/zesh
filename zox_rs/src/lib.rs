@@ -1,3 +1,5 @@
+use std::cell::RefCell;
+use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::str;
@@ -41,6 +43,7 @@ pub trait ZoxideOperations {
 }
 
 /// Default implementation that calls the real zoxide command
+#[derive(Copy, Clone)]
 pub struct ZoxideClient;
 
 impl ZoxideClient {
@@ -149,101 +152,99 @@ fn parse_zoxide_query_output(output: &str) -> ZoxideResult<Vec<ZoxideEntry>> {
     parse_zoxide_list_output(output)
 }
 
+/// A mock implementation of ZoxideOperations for testing
+#[derive(Default)]
+pub struct MockZoxideClient {
+    // Store paths and their scores
+    paths: RefCell<HashMap<PathBuf, f64>>,
+}
+
+impl MockZoxideClient {
+    pub fn new() -> Self {
+        Self {
+            paths: RefCell::new(HashMap::new()),
+        }
+    }
+
+    /// Preset paths and scores for testing
+    pub fn with_paths(paths: HashMap<PathBuf, f64>) -> Self {
+        Self {
+            paths: RefCell::new(paths),
+        }
+    }
+}
+
+impl ZoxideOperations for MockZoxideClient {
+    fn add<P: AsRef<Path>>(&self, path: P) -> ZoxideResult<()> {
+        let path_buf = path.as_ref().to_path_buf();
+        let mut paths = self.paths.borrow_mut();
+
+        // If path already exists, increase its score by 1
+        // Otherwise add it with a score of 1
+        *paths.entry(path_buf).or_insert(0.0) += 1.0;
+
+        Ok(())
+    }
+
+    fn list(&self) -> ZoxideResult<Vec<ZoxideEntry>> {
+        let paths = self.paths.borrow();
+
+        let mut entries: Vec<ZoxideEntry> = paths
+            .iter()
+            .map(|(path, &score)| ZoxideEntry {
+                path: path.clone(),
+                score,
+            })
+            .collect();
+
+        // Sort by score descending
+        entries.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        Ok(entries)
+    }
+
+    fn query(&self, keywords: &[&str]) -> ZoxideResult<Vec<ZoxideEntry>> {
+        let paths = self.paths.borrow();
+
+        // Simple filtering: check if any keyword is a substring of the path
+        let filtered: Vec<ZoxideEntry> = paths
+            .iter()
+            .filter(|(path, _)| {
+                if keywords.is_empty() {
+                    return true;
+                }
+
+                let path_str = path.to_string_lossy().to_lowercase();
+                keywords
+                    .iter()
+                    .any(|&keyword| path_str.contains(&keyword.to_lowercase()))
+            })
+            .map(|(path, &score)| ZoxideEntry {
+                path: path.clone(),
+                score,
+            })
+            .collect();
+
+        // Sort by score descending
+        let mut result = filtered;
+        result.sort_by(|a, b| {
+            b.score
+                .partial_cmp(&a.score)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
+
+        Ok(result)
+    }
+}
+
 #[cfg(test)]
 pub mod tests {
     use super::*;
-    use std::cell::RefCell;
     use std::collections::HashMap;
-
-    /// A mock implementation of ZoxideOperations for testing
-    #[derive(Default)]
-    pub struct MockZoxideClient {
-        // Store paths and their scores
-        paths: RefCell<HashMap<PathBuf, f64>>,
-    }
-
-    impl MockZoxideClient {
-        pub fn new() -> Self {
-            Self {
-                paths: RefCell::new(HashMap::new()),
-            }
-        }
-
-        /// Preset paths and scores for testing
-        pub fn with_paths(paths: HashMap<PathBuf, f64>) -> Self {
-            Self {
-                paths: RefCell::new(paths),
-            }
-        }
-    }
-
-    impl ZoxideOperations for MockZoxideClient {
-        fn add<P: AsRef<Path>>(&self, path: P) -> ZoxideResult<()> {
-            let path_buf = path.as_ref().to_path_buf();
-            let mut paths = self.paths.borrow_mut();
-
-            // If path already exists, increase its score by 1
-            // Otherwise add it with a score of 1
-            *paths.entry(path_buf).or_insert(0.0) += 1.0;
-
-            Ok(())
-        }
-
-        fn list(&self) -> ZoxideResult<Vec<ZoxideEntry>> {
-            let paths = self.paths.borrow();
-
-            let mut entries: Vec<ZoxideEntry> = paths
-                .iter()
-                .map(|(path, &score)| ZoxideEntry {
-                    path: path.clone(),
-                    score,
-                })
-                .collect();
-
-            // Sort by score descending
-            entries.sort_by(|a, b| {
-                b.score
-                    .partial_cmp(&a.score)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
-
-            Ok(entries)
-        }
-
-        fn query(&self, keywords: &[&str]) -> ZoxideResult<Vec<ZoxideEntry>> {
-            let paths = self.paths.borrow();
-
-            // Simple filtering: check if any keyword is a substring of the path
-            let filtered: Vec<ZoxideEntry> = paths
-                .iter()
-                .filter(|(path, _)| {
-                    if keywords.is_empty() {
-                        return true;
-                    }
-
-                    let path_str = path.to_string_lossy().to_lowercase();
-                    keywords
-                        .iter()
-                        .any(|&keyword| path_str.contains(&keyword.to_lowercase()))
-                })
-                .map(|(path, &score)| ZoxideEntry {
-                    path: path.clone(),
-                    score,
-                })
-                .collect();
-
-            // Sort by score descending
-            let mut result = filtered;
-            result.sort_by(|a, b| {
-                b.score
-                    .partial_cmp(&a.score)
-                    .unwrap_or(std::cmp::Ordering::Equal)
-            });
-
-            Ok(result)
-        }
-    }
-
     #[test]
     fn test_mock_zoxide_add() {
         let client = MockZoxideClient::new();
