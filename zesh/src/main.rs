@@ -5,6 +5,7 @@ use std::path::{Path, PathBuf};
 use std::process::Command;
 use zesh::connection::ConnectService;
 use zesh::fs::RealFs;
+use zesh_git::RealGit;
 
 use zellij_rs::{ZellijClient, ZellijOperations};
 use zox_rs::{ZoxideClient, ZoxideOperations};
@@ -63,8 +64,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let zellij = ZellijClient::new();
     let zoxide = ZoxideClient::new();
     let fs = RealFs::new();
+    let git = RealGit;
 
-    let connect_service = ConnectService::new(zellij, zoxide, fs);
+    let connect_service = ConnectService::new(zellij, zoxide, fs, git);
 
     match &cli.command {
         Commands::List => {

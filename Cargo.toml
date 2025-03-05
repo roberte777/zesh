@@ -1,7 +1,7 @@
 [workspace]
 members = [
     "zellij_rs",
-    "zesh",
+    "zesh", "zesh_git",
     "zox_rs",
 ]
 resolver = "2"
