@@ -3,10 +3,6 @@
 A zellij session manager with zoxide integration, inspired by [tmux-sesh](https://github.com/joshmedeski/sesh)
 by Josh Medeski.
 
-<p align="center">
-  <img src="https://raw.githubusercontent.com/zellij-org/zellij/main/assets/logo.png" alt="Zellij Logo" width="200">
-</p>
-
 ## ✨ Features
 
 - 📋 List active zellij sessions
