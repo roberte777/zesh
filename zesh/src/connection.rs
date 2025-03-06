@@ -1,11 +1,12 @@
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use thiserror::Error;
+use zesh_git::{Git, GitError};
 
 use crate::fs::{FsError, FsOperations};
 use zellij_rs::{Session, ZellijError, ZellijOperations};
 use zox_rs::{ZoxideError, ZoxideOperations};
 
-/// Error type for Connect service operations
+// Update ConnectError to include Git errors
 #[derive(Debug, Error)]
 pub enum ConnectError {
     #[error("Zellij error: {0}")]
@@ -17,6 +18,9 @@ pub enum ConnectError {
     #[error("Filesystem error: {0}")]
     Fs(#[from] FsError),
 
+    #[error("Git error: {0}")]
+    Git(#[from] GitError),
+
     #[error("No matching sessions or directories found for '{0}'")]
     NoMatch(String),
 
@@ -25,26 +29,34 @@ pub enum ConnectError {
 }
 
 /// Connect service handles connecting to zellij sessions, directories, or zoxide entries
-pub struct ConnectService<Z, X, F>
+pub struct ConnectService<Z, X, F, G>
 where
     Z: ZellijOperations,
     X: ZoxideOperations,
     F: FsOperations,
+    G: Git,
 {
     zellij: Z,
     zoxide: X,
     fs: F,
+    git: G,
 }
 
-impl<Z, X, F> ConnectService<Z, X, F>
+impl<Z, X, F, G> ConnectService<Z, X, F, G>
 where
     Z: ZellijOperations,
     X: ZoxideOperations,
     F: FsOperations,
+    G: Git,
 {
     /// Create a new ConnectService
-    pub fn new(zellij: Z, zoxide: X, fs: F) -> Self {
-        Self { zellij, zoxide, fs }
+    pub fn new(zellij: Z, zoxide: X, fs: F, git: G) -> Self {
+        Self {
+            zellij,
+            zoxide,
+            fs,
+            git,
+        }
     }
 
     /// Connect to a session by name, or a directory by path or zoxide query
@@ -85,12 +97,15 @@ where
     pub fn connect_to_directory(&self, dir: &str) -> Result<(), ConnectError> {
         let path = PathBuf::from(dir);
 
-        // Validate and get canonical path and directory name
-        let (canon_path, dir_name) = self.fs.validate_dir_path(&path)?;
+        // Validate and get canonical path
+        let (canon_path, _) = self.fs.validate_dir_path(&path)?;
+
+        // Get the session name based on Git repository info
+        let session_name = self.get_session_name_for_path(&canon_path)?;
 
         // Check if session with this name already exists
         let sessions = self.zellij.list_sessions()?;
-        let session_match = sessions.iter().find(|s| s.name == dir_name);
+        let session_match = sessions.iter().find(|s| s.name == session_name);
 
         if let Some(session) = session_match {
             // If session exists, attach to it
@@ -98,11 +113,11 @@ where
         } else {
             // Otherwise create a new session
             self.fs.set_current_dir(&canon_path)?;
-            self.zellij.new_session(&dir_name)?;
+            self.zellij.new_session(&session_name)?;
         }
 
         // Add to zoxide database
-        self.zoxide.add(canon_path)?;
+        self.zoxide.add(&canon_path)?;
 
         Ok(())
     }
@@ -119,8 +134,8 @@ where
         let best_match = &entries[0];
         let path = &best_match.path;
 
-        // Get directory name for session name
-        let session_name = self.fs.get_dir_name(path)?;
+        // Get the session name based on Git repository info
+        let session_name = self.get_session_name_for_path(path)?;
 
         // Check if session with this name already exists
         let sessions = self.zellij.list_sessions()?;
@@ -144,6 +159,52 @@ where
     pub fn list_sessions(&self) -> Result<Vec<Session>, ConnectError> {
         Ok(self.zellij.list_sessions()?)
     }
+
+    /// Determine a session name for the given path, checking if it's in a Git repository
+    fn get_session_name_for_path(&self, path: &Path) -> Result<String, ConnectError> {
+        let path_str = path
+            .to_str()
+            .ok_or_else(|| ConnectError::Other("Invalid path".to_string()))?;
+
+        // Try to get the Git repository root
+        match self.git.show_top_level(path_str) {
+            Ok((true, git_root)) => {
+                // Path is in a Git repository
+                let git_root_path = PathBuf::from(&git_root);
+                let git_root_name = self.fs.get_dir_name(&git_root_path)?;
+
+                // If the path is the git root, just use the root name
+                if path == git_root_path {
+                    return Ok(git_root_name);
+                }
+
+                // Get the relative path from the Git root
+                match path.strip_prefix(&git_root_path) {
+                    Ok(rel_path) => {
+                        if rel_path == Path::new("") {
+                            // We're at the git root itself
+                            Ok(git_root_name)
+                        } else {
+                            // We're in a subdirectory
+                            // We have to use '_' because zellij does not
+                            // support '/' in session names
+                            Ok(format!("{}_{}", git_root_name, rel_path.display()))
+                        }
+                    }
+                    Err(_) => Ok(self.fs.get_dir_name(path)?), // Fallback to dir name on error
+                }
+            }
+            Ok((false, _)) => {
+                // Not in a Git repository, just use the directory name
+                Ok(self.fs.get_dir_name(path)?)
+            }
+            Err(e) => {
+                // Error running git command, log it and fall back to directory name
+                eprintln!("Git error: {}", e);
+                Ok(self.fs.get_dir_name(path)?)
+            }
+        }
+    }
 }
 
 #[cfg(test)]
@@ -160,7 +221,7 @@ mod tests {
         zellij_sessions: Option<HashMap<String, bool>>,
         zoxide_paths: Option<HashMap<PathBuf, f64>>,
         fs_dirs: Option<Vec<(PathBuf, String)>>,
-    ) -> ConnectService<MockZellijClient, MockZoxideClient, MockFs> {
+    ) -> ConnectService<MockZellijClient, MockZoxideClient, MockFs, TestGit> {
         // Setup mock zellij client
         let zellij = if let Some(sessions) = zellij_sessions {
             MockZellijClient::with_sessions(sessions)
@@ -183,7 +244,7 @@ mod tests {
             }
         }
 
-        ConnectService::new(zellij, zoxide, fs)
+        ConnectService::new(zellij, zoxide, fs, TestGit::new(false, "./"))
     }
 
     // Helper function to create a failing zellij client
@@ -309,7 +370,7 @@ mod tests {
         let zellij = FailingZellijClient;
         let zoxide = MockZoxideClient::new();
         let fs = MockFs::new();
-        let service = ConnectService::new(zellij, zoxide, fs);
+        let service = ConnectService::new(zellij, zoxide, fs, TestGit::new(false, "./"));
 
         let result = service.connect_to_session("any-session");
         assert!(result.is_err());
@@ -381,7 +442,12 @@ mod tests {
         // Setup a file path (not a directory)
         let fs = MockFs::new();
         fs.with_file(&PathBuf::from("/mock/file.txt"));
-        let service = ConnectService::new(MockZellijClient::new(), MockZoxideClient::new(), fs);
+        let service = ConnectService::new(
+            MockZellijClient::new(),
+            MockZoxideClient::new(),
+            fs,
+            TestGit::new(false, "./"),
+        );
 
         // Test with a file path instead of directory
         let result = service.connect_to_directory("/mock/file.txt");
@@ -399,7 +465,7 @@ mod tests {
         let zellij = MockZellijClient::new();
         let zoxide = MockZoxideClient::new();
         let fs = FailingFs;
-        let service = ConnectService::new(zellij, zoxide, fs);
+        let service = ConnectService::new(zellij, zoxide, fs, TestGit::new(false, "./"));
 
         let result = service.connect_to_directory("/any/path");
         assert!(result.is_err());
@@ -414,7 +480,7 @@ mod tests {
         let zoxide = MockZoxideClient::new();
         let fs = MockFs::new();
         fs.with_directory(&PathBuf::from("/mock/project"), "project");
-        let service = ConnectService::new(zellij, zoxide, fs);
+        let service = ConnectService::new(zellij, zoxide, fs, TestGit::new(false, "./"));
 
         let result = service.connect_to_directory("/mock/project");
         assert!(result.is_err());
@@ -429,7 +495,7 @@ mod tests {
         let zoxide = FailingZoxideClient;
         let fs = MockFs::new();
         fs.with_directory(&PathBuf::from("/mock/project"), "project");
-        let service = ConnectService::new(zellij, zoxide, fs);
+        let service = ConnectService::new(zellij, zoxide, fs, TestGit::new(false, "./"));
 
         let result = service.connect_to_directory("/mock/project");
         assert!(result.is_err());
@@ -566,7 +632,7 @@ mod tests {
         let zellij = MockZellijClient::new();
         let zoxide = FailingZoxideClient;
         let fs = MockFs::new();
-        let service = ConnectService::new(zellij, zoxide, fs);
+        let service = ConnectService::new(zellij, zoxide, fs, TestGit::new(false, "./"));
 
         let result = service.connect_via_zoxide("query");
         assert!(result.is_err());
@@ -689,7 +755,7 @@ mod tests {
         let zellij = FailingZellijClient;
         let zoxide = MockZoxideClient::new();
         let fs = MockFs::new();
-        let service = ConnectService::new(zellij, zoxide, fs);
+        let service = ConnectService::new(zellij, zoxide, fs, TestGit::new(false, "./"));
 
         let result = service.connect("anything");
         assert!(result.is_err());
@@ -723,7 +789,7 @@ mod tests {
         let zellij = FailingZellijClient;
         let zoxide = MockZoxideClient::new();
         let fs = MockFs::new();
-        let service = ConnectService::new(zellij, zoxide, fs);
+        let service = ConnectService::new(zellij, zoxide, fs, TestGit::new(false, "./"));
 
         // Test listing sessions with failing dependency
         let result = service.list_sessions();
@@ -813,5 +879,128 @@ mod tests {
                 .iter()
                 .any(|s| s.name == "project3" && !s.is_current)
         );
+    }
+    // Custom Git mock for testing
+    struct TestGit {
+        is_git_repo: bool,
+        git_root: String,
+    }
+
+    impl TestGit {
+        fn new(is_git_repo: bool, git_root: &str) -> Self {
+            Self {
+                is_git_repo,
+                git_root: git_root.to_string(),
+            }
+        }
+    }
+
+    impl Git for TestGit {
+        fn show_top_level(&self, _name: &str) -> Result<(bool, String), GitError> {
+            Ok((self.is_git_repo, self.git_root.clone()))
+        }
+
+        fn git_common_dir(&self, _name: &str) -> Result<(bool, String), GitError> {
+            Ok((self.is_git_repo, "/mock/repo/common-dir".to_string()))
+        }
+
+        fn clone(&self, _url: &str, _cmd_dir: &str, _dir: &str) -> Result<String, GitError> {
+            Ok("Mock clone successful".to_string())
+        }
+    }
+
+    // Helper function to create a ConnectService with the TestGit
+    fn create_service_with_git(
+        zellij_sessions: Option<HashMap<String, bool>>,
+        zoxide_paths: Option<HashMap<PathBuf, f64>>,
+        fs_dirs: Option<Vec<(PathBuf, String)>>,
+        is_git_repo: bool,
+        git_root: &str,
+    ) -> ConnectService<MockZellijClient, MockZoxideClient, MockFs, TestGit> {
+        let zellij = if let Some(sessions) = zellij_sessions {
+            MockZellijClient::with_sessions(sessions)
+        } else {
+            MockZellijClient::new()
+        };
+
+        let zoxide = if let Some(paths) = zoxide_paths {
+            MockZoxideClient::with_paths(paths)
+        } else {
+            MockZoxideClient::new()
+        };
+
+        let fs = MockFs::new();
+        if let Some(dirs) = fs_dirs {
+            for (path, name) in dirs {
+                fs.with_directory(&path, &name);
+            }
+        }
+
+        let git = TestGit::new(is_git_repo, git_root);
+
+        ConnectService::new(zellij, zoxide, fs, git)
+    }
+
+    #[test]
+    fn test_get_session_name_for_git_repo() {
+        // Set up mock file system with git repo structure
+        let git_root = PathBuf::from("/mock/foo");
+        let subdir = PathBuf::from("/mock/foo/bar");
+
+        let fs_dirs = vec![
+            (git_root.clone(), "foo".to_string()),
+            (subdir.clone(), "bar".to_string()),
+        ];
+
+        // Create service with git repo configuration
+        let service = create_service_with_git(None, None, Some(fs_dirs), true, "/mock/foo");
+
+        // Test getting session name for git root
+        let name = service.get_session_name_for_path(&git_root).unwrap();
+        assert_eq!(name, "foo");
+
+        // Test getting session name for subdirectory
+        let name = service.get_session_name_for_path(&subdir).unwrap();
+        assert_eq!(name, "foo_bar");
+    }
+
+    #[test]
+    fn test_get_session_name_for_non_git_path() {
+        // Set up mock file system with directory not in git repo
+        let path = PathBuf::from("/mock/not-git");
+
+        let fs_dirs = vec![(path.clone(), "not-git".to_string())];
+
+        // Create service with non-git configuration
+        let service = create_service_with_git(None, None, Some(fs_dirs), false, "");
+
+        // Test getting session name for non-git path
+        let name = service.get_session_name_for_path(&path).unwrap();
+        assert_eq!(name, "not-git");
+    }
+
+    #[test]
+    fn test_connect_to_git_directory() {
+        // Set up mock file system with git repo structure
+        let git_root = PathBuf::from("/mock/project");
+        let subdir = PathBuf::from("/mock/project/feature");
+
+        let fs_dirs = vec![
+            (git_root.clone(), "project".to_string()),
+            (subdir.clone(), "feature".to_string()),
+        ];
+
+        // Create service with git repo configuration
+        let service = create_service_with_git(None, None, Some(fs_dirs), true, "/mock/project");
+
+        // Connect to subdirectory
+        let result = service.connect_to_directory("/mock/project/feature");
+        assert!(result.is_ok());
+
+        // Verify the session name is git-aware
+        let sessions = service.list_sessions().unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].name, "project_feature");
+        assert!(sessions[0].is_current);
     }
 }
