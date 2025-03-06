@@ -1,72 +1,91 @@
-# Zesh
+# 🔥 Zesh
 
-A zellij session manager with zoxide integration, inspired by tmux-sesh.
+A zellij session manager with zoxide integration, inspired by [tmux-sesh](https://github.com/joshmedeski/sesh)
+by Josh Medeski.
 
-## Features
+<p align="center">
+  <img src="https://raw.githubusercontent.com/zellij-org/zellij/main/assets/logo.png" alt="Zellij Logo" width="200">
+</p>
 
-- List active zellij sessions
-- Connect to the last used session
-- Create and connect to sessions based on directories
-- Clone git repositories and set up sessions
-- Fuzzy directory searching with zoxide integration
-- Preview sessions and directories
+## ✨ Features
 
-## Installation
+- 📋 List active zellij sessions
+- 📁 Create and connect to sessions based on zoxide
+- 🧠 Smart session detection and management
+- 🔍 Clone git repositories and set up sessions
+- 🔄 Connect to the last used session (WIP)
+
+## 🛠️ Installation
 
 ```bash
 cargo install --locked zesh
 ```
 
-## Requirements
+## 📋 Requirements
 
-- [zellij](https://zellij.dev/) - Terminal multiplexer
-- [zoxide](https://github.com/ajeetdsouza/zoxide) - Smarter cd command
-- [git](https://git-scm.com/) - Version control (optional, for clone command)
+- [zellij](https://zellij.dev/) - 🧩 Terminal multiplexer
+- [zoxide](https://github.com/ajeetdsouza/zoxide) - 🔍 Smarter cd command
+- [git](https://git-scm.com/) - 📦 Version control (optional, for clone command)
 
-## Usage
+## 🚀 Usage
 
-```
-# List active sessions
-zesh list
-zesh l
-
-# List all recent directories from zoxide
-zesh list --all
-
-# Connect to the last session
-zesh last
-zesh L
-
-# Connect to a specific session or directory
+```bash
+# 🔗 Connect to a specific session or directory
 zesh connect <name>
 zesh cn <name>
 
-# Clone a git repo and create a session
+# 📋 List active sessions (intended to be used with other cli tools, like fzf)
+zesh list
+zesh l
+
+# Pair the two commands with fzf
+zesh cn $(zesh l | fzf)
+
+# 📦 Clone a git repo and create a session
 zesh clone https://github.com/username/repo
 zesh cl https://github.com/username/repo
 
-# Show the root directory of the current session
+# 📂 Show the root directory of the current session
 zesh root
 zesh r
 
-# Preview a session or directory
+# 👁️ Preview a session or directory
 zesh preview <name>
 zesh p <name>
 
-# Display help
+# ❓ Display help
 zesh help
 zesh h
 ```
 
-## Why Zesh?
+## Subject to Change
 
-Zesh combines the power of zellij (terminal multiplexer) and zoxide (directory jumper) to provide a seamless session management experience. It's designed for developers who frequently work on multiple projects and want to quickly jump between them.
+This project is still heavily under development. Currently, some current
+features may change, and some essential features have not been added.
 
-The name "zesh" is a combination of:
+**Potential to Change**:
 
-- **z** from **z**ellij and **z**oxide
-- **sh** from se**sh**
+- I am currently unsure of how zesh list should operate. The current method is
+nice for fzf, but not much else. This may change in the future.
 
-## License
+**Missing Essentials**:
+
+- I am missing functionality to pass arguments to git clone and zellij. This
+is espeically important, as layouts are heavily used in zellij.
+
+## ❓ Why Zesh?
+
+Zesh combines the power of zellij (terminal multiplexer) and zoxide
+(directory jumper) to provide a seamless session management experience. It's
+designed for developers who frequently work on multiple projects and want to
+quickly jump between them.
+
+## 🙏 Credits
+
+This project was inspired by [sesh](https://github.com/joshmedeski/sesh) by
+Josh Medeski, a tmux session manager. Huge thanks to Josh for the original
+concept that made terminal session management so much more enjoyable!
+
+## 📜 License
 
 MIT
