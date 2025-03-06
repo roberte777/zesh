@@ -1,6 +1,6 @@
 [package]
 name = "zesh"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 license = "MIT"
 description = "A zellij session manager with zoxide integration, inspired by tmux sesh."
@@ -11,6 +11,6 @@ readme="../README.md"
 anyhow = "1.0.97"
 clap = { version = "4.4", features = ["derive"] }
 thiserror = "1.0"
-zellij_rs = { path = "../zellij_rs", version = "0.1.0"}
-zox_rs = { path = "../zox_rs", version = "0.1.0"}
+zellij_rs = { path = "../zellij_rs", version = "0.2.0"}
+zox_rs = { path = "../zox_rs", version = "0.2.0"}
 zesh_git = { path = "../zesh_git", version = "0.1.0"}
