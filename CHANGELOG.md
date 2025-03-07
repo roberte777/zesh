@@ -12,6 +12,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/).
 
 - Checks if the directory is a git directory. If so, adds the path to the
 directory opened in the session name: base_subfolder_folder
+- Pass zellij flags when creating a new session
 
 ### Fixed
 

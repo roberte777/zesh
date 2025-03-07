@@ -3,6 +3,8 @@ use std::collections::HashMap;
 use std::io::Read;
 use std::process::{Command, Stdio};
 use std::str;
+pub mod options;
+use options::ZellijOptions;
 
 /// Result type for zellij operations
 pub type ZellijResult<T> = Result<T, ZellijError>;
@@ -57,7 +59,7 @@ pub trait ZellijOperations {
     fn attach_session(&self, session_name: &str) -> ZellijResult<()>;
 
     /// Create a new session
-    fn new_session(&self, session_name: &str) -> ZellijResult<()>;
+    fn new_session(&self, session_name: &str, options: &ZellijOptions) -> ZellijResult<()>;
 
     /// Close a session
     fn kill_session(&self, session_name: &str) -> ZellijResult<()>;
@@ -134,15 +136,40 @@ impl ZellijOperations for ZellijClient {
         Ok(())
     }
 
-    fn new_session(&self, session_name: &str) -> ZellijResult<()> {
-        let mut child = Command::new("zellij")
-            .arg("--session")
+    fn new_session(&self, session_name: &str, options: &ZellijOptions) -> ZellijResult<()> {
+        let mut cmd = Command::new("zellij");
+        cmd.arg("--session")
             .arg(session_name)
-            .stderr(Stdio::piped())
-            .spawn()?;
+            .stderr(Stdio::piped());
+
+        // Apply options
+        if let Some(layout) = &options.new_session_with_layout {
+            cmd.arg("--new-session-with-layout").arg(layout);
+        }
+
+        if let Some(config) = &options.config {
+            cmd.arg("--config").arg(config);
+        }
+
+        if let Some(config_dir) = &options.config_dir {
+            cmd.arg("--config-dir").arg(config_dir);
+        }
+
+        if let Some(data_dir) = &options.data_dir {
+            cmd.arg("--data-dir").arg(data_dir);
+        }
+
+        if let Some(max_panes) = &options.max_panes {
+            cmd.arg("--max-panes").arg(max_panes.to_string());
+        }
+
+        if options.debug {
+            cmd.arg("--debug");
+        }
+
+        let mut child = cmd.spawn()?;
 
         let mut stderr = String::new();
-
         if let Some(mut err) = child.stderr.take() {
             err.read_to_string(&mut stderr)?;
         }
@@ -366,7 +393,7 @@ impl ZellijOperations for MockZellijClient {
         Ok(())
     }
 
-    fn new_session(&self, session_name: &str) -> ZellijResult<()> {
+    fn new_session(&self, session_name: &str, _options: &ZellijOptions) -> ZellijResult<()> {
         let mut sessions = self.sessions.borrow_mut();
 
         // Mark the current session as not current
@@ -503,7 +530,9 @@ pub mod tests {
         assert_eq!(current_session.name, "work");
 
         // Test creating a new session
-        client.new_session("project").unwrap();
+        client
+            .new_session("project", &ZellijOptions::default())
+            .unwrap();
         let updated_sessions = client.list_sessions().unwrap();
         assert_eq!(updated_sessions.len(), 3);
 

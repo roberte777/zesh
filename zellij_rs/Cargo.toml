@@ -7,4 +7,5 @@ description = "Support for zesh"
 repository = "https://github.com/roberte777/zesh/zellij_rs"
 
 [dependencies]
+clap = { version = "4.5.31", features = ["derive"] }
 thiserror = "2.0.11"
