@@ -4,6 +4,8 @@ on:
   push:
     tags:
       - 'zesh-v*'
+permissions:
+  contents: write  # Set at workflow level
 
 jobs:
   build:
