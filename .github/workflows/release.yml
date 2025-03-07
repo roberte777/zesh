@@ -1,10 +1,9 @@
 name: Release
 
 on:
-  workflow_dispatch
-  # push:
-  #   tags:
-  #     - 'zesh-v*'
+  push:
+    tags:
+      - 'zesh-v*'
 
 jobs:
   build:
