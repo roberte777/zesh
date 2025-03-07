@@ -1,6 +1,6 @@
 [package]
 name = "zesh"
-version = "0.2.0"
+version = "0.3.0-dev"
 edition = "2024"
 license = "MIT"
 description = "A zellij session manager with zoxide integration, inspired by tmux sesh."
