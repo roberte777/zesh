@@ -53,33 +53,6 @@ jobs:
         id: extract_version
         run: echo "VERSION=${GITHUB_REF#refs/tags/zesh-v}" >> $GITHUB_ENV
 
-      - name: Extract release notes
-        id: extract_release_notes
-        run: |
-          # Extract the relevant section from CHANGELOG.md
-          VERSION="${{ env.VERSION }}"
-          awk -v version="$VERSION" '
-          /^## / { 
-            if (found) exit; 
-            if ($2 == version || $2 == "'"$VERSION"'") { 
-              found=1; 
-              next;
-            } 
-          }
-          found { print }
-          ' CHANGELOG.md > release_notes.md
-          
-          # Check if we got any content
-          if [ ! -s release_notes.md ]; then
-            echo "Failed to extract release notes for version $VERSION"
-            exit 1
-          fi
-          
-          # Set release notes as output
-          echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
-          cat release_notes.md >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
