@@ -3,6 +3,7 @@ use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use zellij_rs::options::ZellijOptions;
 use zesh::connection::ConnectService;
 use zesh::fs::RealFs;
 use zesh_git::RealGit;
@@ -30,6 +31,8 @@ enum Commands {
     Connect {
         /// Session name or part of path
         name: String,
+        #[clap(flatten)]
+        zellij_options: ZellijOptions,
     },
 
     /// Clone a git repo and connect to it as a session
@@ -45,6 +48,9 @@ enum Commands {
         /// Optional path to clone into (defaults to current directory)
         #[clap(long)]
         path: Option<PathBuf>,
+        /// Zellij options
+        #[clap(flatten)]
+        zellij_options: ZellijOptions,
     },
 
     /// Show the root directory from the active session
@@ -86,11 +92,14 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 println!("{}", session.name,);
             }
         }
-        Commands::Connect { name } => {
+        Commands::Connect {
+            name,
+            zellij_options,
+        } => {
             // Use our new connect service
-            if let Err(e) = connect_service.connect(name) {
-                eprintln!("Error connecting to '{}': {}", name, e);
-                return Err(e.into());
+            if let Err(e) = connect_service.connect(name, zellij_options) {
+                // eprintln!("Error connecting to '{}': {}", name, e);
+                // return Err(e.into());
             }
         }
 
@@ -98,6 +107,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             repo_url,
             name,
             path,
+            zellij_options,
         } => {
             // Determine the repo name from URL
             let repo_name = extract_repo_name(repo_url)?;
@@ -134,7 +144,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             env::set_current_dir(&clone_path)?;
 
             // Create new session
-            zellij.new_session(session_name)?;
+            zellij.new_session(session_name, zellij_options)?;
 
             // Add to zoxide database
             zoxide.add(&clone_path)?;

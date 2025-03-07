@@ -3,7 +3,7 @@ use thiserror::Error;
 use zesh_git::{Git, GitError};
 
 use crate::fs::{FsError, FsOperations};
-use zellij_rs::{Session, ZellijError, ZellijOperations};
+use zellij_rs::{Session, ZellijError, ZellijOperations, options::ZellijOptions};
 use zox_rs::{ZoxideError, ZoxideOperations};
 
 // Update ConnectError to include Git errors
@@ -60,24 +60,21 @@ where
     }
 
     /// Connect to a session by name, or a directory by path or zoxide query
-    pub fn connect(&self, name: &str) -> Result<(), ConnectError> {
+    pub fn connect(&self, name: &str, options: &ZellijOptions) -> Result<(), ConnectError> {
         // First try to connect to an existing zellij session
         match self.connect_to_session(name) {
             Ok(_) => return Ok(()),
             Err(ConnectError::NoMatch(_)) => {}
             Err(e) => return Err(e),
         }
-        if let Ok(()) = self.connect_to_session(name) {
-            return Ok(());
-        }
 
         // Then try if it's a directory path
-        if let Ok(()) = self.connect_to_directory(name) {
+        if let Ok(()) = self.connect_to_directory(name, options) {
             return Ok(());
         }
 
         // Finally try zoxide query
-        self.connect_via_zoxide(name)
+        self.connect_via_zoxide(name, options)
     }
 
     /// Connect to a session by name
@@ -94,7 +91,11 @@ where
     }
 
     /// Connect to a directory, creating a new session or attaching to an existing one
-    pub fn connect_to_directory(&self, dir: &str) -> Result<(), ConnectError> {
+    pub fn connect_to_directory(
+        &self,
+        dir: &str,
+        options: &ZellijOptions,
+    ) -> Result<(), ConnectError> {
         let path = PathBuf::from(dir);
 
         // Validate and get canonical path
@@ -113,7 +114,7 @@ where
         } else {
             // Otherwise create a new session
             self.fs.set_current_dir(&canon_path)?;
-            self.zellij.new_session(&session_name)?;
+            self.zellij.new_session(&session_name, options)?;
         }
 
         // Add to zoxide database
@@ -123,7 +124,11 @@ where
     }
 
     /// Connect to a directory using zoxide query
-    pub fn connect_via_zoxide(&self, query: &str) -> Result<(), ConnectError> {
+    pub fn connect_via_zoxide(
+        &self,
+        query: &str,
+        options: &ZellijOptions,
+    ) -> Result<(), ConnectError> {
         let entries = self.zoxide.query(&[query])?;
 
         if entries.is_empty() {
@@ -147,7 +152,7 @@ where
 
         // Create a new session
         self.fs.set_current_dir(path)?;
-        self.zellij.new_session(&session_name)?;
+        self.zellij.new_session(&session_name, options)?;
 
         // Add to zoxide database
         self.zoxide.add(path)?;
@@ -258,7 +263,7 @@ mod tests {
             Err(ZellijError::CommandExecution("Command failed".to_string()))
         }
 
-        fn new_session(&self, _: &str) -> zellij_rs::ZellijResult<()> {
+        fn new_session(&self, _: &str, _: &ZellijOptions) -> zellij_rs::ZellijResult<()> {
             Err(ZellijError::CommandExecution("Command failed".to_string()))
         }
 
@@ -392,7 +397,7 @@ mod tests {
         );
 
         // Test connecting to directory that doesn't have a session yet
-        let result = service.connect_to_directory("/mock/project");
+        let result = service.connect_to_directory("/mock/project", &ZellijOptions::default());
         assert!(result.is_ok());
 
         // After connection, should have a new session with the directory name
@@ -416,7 +421,7 @@ mod tests {
         );
 
         // Test connecting to directory that already has a session
-        let result = service.connect_to_directory("/mock/project");
+        let result = service.connect_to_directory("/mock/project", &ZellijOptions::default());
         assert!(result.is_ok());
 
         // After connection, should attach to existing session
@@ -431,7 +436,7 @@ mod tests {
         let service = create_service(None, None, None);
 
         // Test with non-existent path
-        let result = service.connect_to_directory("/mock/non-existent");
+        let result = service.connect_to_directory("/mock/non-existent", &ZellijOptions::default());
         assert!(result.is_err());
         if let Err(ConnectError::Fs(_)) = result {
             // Expected error
@@ -450,7 +455,7 @@ mod tests {
         );
 
         // Test with a file path instead of directory
-        let result = service.connect_to_directory("/mock/file.txt");
+        let result = service.connect_to_directory("/mock/file.txt", &ZellijOptions::default());
         assert!(result.is_err());
         if let Err(ConnectError::Fs(_)) = result {
             // Expected error
@@ -467,7 +472,7 @@ mod tests {
         let fs = FailingFs;
         let service = ConnectService::new(zellij, zoxide, fs, TestGit::new(false, "./"));
 
-        let result = service.connect_to_directory("/any/path");
+        let result = service.connect_to_directory("/any/path", &ZellijOptions::default());
         assert!(result.is_err());
         if let Err(ConnectError::Fs(_)) = result {
             // Expected error
@@ -482,7 +487,7 @@ mod tests {
         fs.with_directory(&PathBuf::from("/mock/project"), "project");
         let service = ConnectService::new(zellij, zoxide, fs, TestGit::new(false, "./"));
 
-        let result = service.connect_to_directory("/mock/project");
+        let result = service.connect_to_directory("/mock/project", &ZellijOptions::default());
         assert!(result.is_err());
         if let Err(ConnectError::Zellij(_)) = result {
             // Expected error
@@ -497,7 +502,7 @@ mod tests {
         fs.with_directory(&PathBuf::from("/mock/project"), "project");
         let service = ConnectService::new(zellij, zoxide, fs, TestGit::new(false, "./"));
 
-        let result = service.connect_to_directory("/mock/project");
+        let result = service.connect_to_directory("/mock/project", &ZellijOptions::default());
         assert!(result.is_err());
         if let Err(ConnectError::Zoxide(_)) = result {
             // Expected error
@@ -519,7 +524,8 @@ mod tests {
             )]),
         );
 
-        let result = service.connect_to_directory("/mock/special project-name!");
+        let result =
+            service.connect_to_directory("/mock/special project-name!", &ZellijOptions::default());
         assert!(result.is_ok());
 
         // Verify session was created with special characters
@@ -544,7 +550,7 @@ mod tests {
         );
 
         // Test connecting via zoxide query that matches single entry
-        let result = service.connect_via_zoxide("zoxide");
+        let result = service.connect_via_zoxide("zoxide", &ZellijOptions::default());
         assert!(result.is_ok());
 
         // After connection, should have a new session with the directory name
@@ -573,7 +579,7 @@ mod tests {
         );
 
         // Test connecting via zoxide query that matches multiple entries
-        let result = service.connect_via_zoxide("match");
+        let result = service.connect_via_zoxide("match", &ZellijOptions::default());
         assert!(result.is_ok());
 
         // Should connect to highest scored match
@@ -601,7 +607,7 @@ mod tests {
         );
 
         // Test connecting via zoxide when session already exists
-        let result = service.connect_via_zoxide("existing");
+        let result = service.connect_via_zoxide("existing", &ZellijOptions::default());
         assert!(result.is_ok());
 
         // Should attach to existing session
@@ -617,7 +623,7 @@ mod tests {
         let service = create_service(None, None, None);
 
         // Test connecting via zoxide with no matches
-        let result = service.connect_via_zoxide("non-existent");
+        let result = service.connect_via_zoxide("non-existent", &ZellijOptions::default());
         assert!(result.is_err());
         if let Err(ConnectError::NoMatch(query)) = result {
             assert_eq!(query, "non-existent");
@@ -634,7 +640,7 @@ mod tests {
         let fs = MockFs::new();
         let service = ConnectService::new(zellij, zoxide, fs, TestGit::new(false, "./"));
 
-        let result = service.connect_via_zoxide("query");
+        let result = service.connect_via_zoxide("query", &ZellijOptions::default());
         assert!(result.is_err());
         if let Err(ConnectError::Zoxide(_)) = result {
             // Expected error
@@ -665,7 +671,7 @@ mod tests {
         );
 
         // 1. Test connect to existing session
-        let result = service.connect("existing-session");
+        let result = service.connect("existing-session", &ZellijOptions::default());
         assert!(result.is_ok());
         let sessions = service.list_sessions().unwrap();
         assert!(
@@ -675,7 +681,7 @@ mod tests {
         );
 
         // 2. Test connect to directory path
-        let result = service.connect("/mock/dir-path");
+        let result = service.connect("/mock/dir-path", &ZellijOptions::default());
         assert!(result.is_ok());
         let sessions = service.list_sessions().unwrap();
         assert!(
@@ -685,7 +691,7 @@ mod tests {
         );
 
         // 3. Test connect via zoxide query
-        let result = service.connect("zoxide-match");
+        let result = service.connect("zoxide-match", &ZellijOptions::default());
         assert!(result.is_ok());
         let sessions = service.list_sessions().unwrap();
         assert!(
@@ -708,7 +714,7 @@ mod tests {
         );
 
         // Test with a name that's not a session, should fallback to directory path
-        let result = service.connect("/mock/valid-dir");
+        let result = service.connect("/mock/valid-dir", &ZellijOptions::default());
         assert!(result.is_ok());
 
         let sessions = service.list_sessions().unwrap();
@@ -729,7 +735,7 @@ mod tests {
         );
 
         // Test with a name that should match zoxide query
-        let result = service.connect("zoxide");
+        let result = service.connect("zoxide", &ZellijOptions::default());
         assert!(result.is_ok());
 
         let sessions = service.list_sessions().unwrap();
@@ -743,7 +749,7 @@ mod tests {
         let service = create_service(None, None, None);
 
         // Test with non-existent name
-        let result = service.connect("non-existent");
+        let result = service.connect("non-existent", &ZellijOptions::default());
         assert!(result.is_err());
         if let Err(ConnectError::NoMatch(name)) = result {
             assert_eq!(name, "non-existent");
@@ -757,7 +763,7 @@ mod tests {
         let fs = MockFs::new();
         let service = ConnectService::new(zellij, zoxide, fs, TestGit::new(false, "./"));
 
-        let result = service.connect("anything");
+        let result = service.connect("anything", &ZellijOptions::default());
         assert!(result.is_err());
         if let Err(ConnectError::Zellij(_)) = result {
             // Expected error
@@ -775,11 +781,11 @@ mod tests {
         let service = create_service(Some(sessions), None, None);
 
         // Test with exact case match
-        let result = service.connect("Case-Sensitive");
+        let result = service.connect("Case-Sensitive", &ZellijOptions::default());
         assert!(result.is_ok());
 
         // Test with different case (should fail)
-        let result = service.connect("case-sensitive");
+        let result = service.connect("case-sensitive", &ZellijOptions::default());
         assert!(result.is_err());
     }
 
@@ -827,7 +833,7 @@ mod tests {
         assert_eq!(initial_sessions[0].name, "existing");
 
         // 2. Connect to directory directly
-        let result = service.connect_to_directory("/mock/project3");
+        let result = service.connect_to_directory("/mock/project3", &ZellijOptions::default());
         assert!(result.is_ok());
 
         // Verify new session created
@@ -845,7 +851,7 @@ mod tests {
         );
 
         // 3. Connect via zoxide
-        let result = service.connect_via_zoxide("project1");
+        let result = service.connect_via_zoxide("project1", &ZellijOptions::default());
         assert!(result.is_ok());
 
         // Verify another session created
@@ -994,13 +1000,81 @@ mod tests {
         let service = create_service_with_git(None, None, Some(fs_dirs), true, "/mock/project");
 
         // Connect to subdirectory
-        let result = service.connect_to_directory("/mock/project/feature");
+        let result =
+            service.connect_to_directory("/mock/project/feature", &ZellijOptions::default());
         assert!(result.is_ok());
 
         // Verify the session name is git-aware
         let sessions = service.list_sessions().unwrap();
         assert_eq!(sessions.len(), 1);
         assert_eq!(sessions[0].name, "project_feature");
+        assert!(sessions[0].is_current);
+    }
+
+    #[test]
+    fn test_connect_to_directory_with_options() {
+        // Setup test directory
+        let dir_path = PathBuf::from("/mock/project");
+        let service = create_service(
+            None,
+            None,
+            Some(vec![(dir_path.clone(), "project".to_string())]),
+        );
+
+        // Create options with debug enabled
+        let options = ZellijOptions {
+            layout: None,
+            config: None,
+            config_dir: None,
+            data_dir: None,
+            max_panes: None,
+            debug: true,
+        };
+
+        // Test connecting to directory with options
+        let result = service.connect_to_directory("/mock/project", &options);
+        assert!(result.is_ok());
+
+        // After connection, should have a new session with the directory name
+        let sessions = service.list_sessions().unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].name, "project");
+        assert!(sessions[0].is_current);
+    }
+
+    #[test]
+    fn test_connect_via_zoxide_with_options() {
+        // Setup zoxide with a single matching path
+        let mut path_scores = HashMap::new();
+        path_scores.insert(PathBuf::from("/mock/zoxide-dir"), 10.0);
+
+        let service = create_service(
+            None,
+            Some(path_scores),
+            Some(vec![(
+                PathBuf::from("/mock/zoxide-dir"),
+                "zoxide-dir".to_string(),
+            )]),
+        );
+
+        // Create options with custom config
+        let options = ZellijOptions {
+            layout: None,
+            config: Some("custom-config.yaml".to_string()),
+            config_dir: None,
+            data_dir: None,
+            max_panes: None,
+            debug: false,
+        };
+
+        // Test connecting via zoxide with options
+        let result = service.connect_via_zoxide("zoxide", &options);
+        assert!(result.is_ok());
+
+        // Should have a new session with the directory name
+        let sessions = service.list_sessions().unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].name, "zoxide-dir");
         assert!(sessions[0].is_current);
     }
 }
