@@ -1,0 +1,257 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'zesh-v*'
+
+jobs:
+  build:
+    name: Build Release Binaries
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: zesh
+            asset_name: zesh-linux-amd64
+          - os: macos-latest
+            artifact_name: zesh
+            asset_name: zesh-macos-amd64
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      
+      - name: Build binary
+        run: cargo build --release
+      
+      - name: Upload artifact
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.asset_name }}
+          path: target/release/${{ matrix.artifact_name }}
+          if-no-files-found: error
+
+  create_release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version from tag
+        id: extract_version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/zesh-v}" >> $GITHUB_ENV
+
+      - name: Extract release notes
+        id: extract_release_notes
+        run: |
+          # Extract the relevant section from CHANGELOG.md
+          VERSION="${{ env.VERSION }}"
+          awk -v version="$VERSION" '
+          /^## / { 
+            if (found) exit; 
+            if ($2 == version || $2 == "'"$VERSION"'") { 
+              found=1; 
+              next;
+            } 
+          }
+          found { print }
+          ' CHANGELOG.md > release_notes.md
+          
+          # Check if we got any content
+          if [ ! -s release_notes.md ]; then
+            echo "Failed to extract release notes for version $VERSION"
+            exit 1
+          fi
+          
+          # Set release notes as output
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
+          cat release_notes.md >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      - name: Prepare binaries
+        run: |
+          mkdir release-binaries
+          # Copy and rename artifacts for cleaner release structure
+          cp artifacts/zesh-linux-amd64/zesh release-binaries/
+          cp artifacts/zesh-macos-amd64/zesh release-binaries/zesh-macos
+          
+          # Make Linux and macOS binaries executable
+          chmod +x release-binaries/zesh release-binaries/zesh-macos
+          
+          # Generate checksums
+          cd release-binaries
+          sha256sum zesh zesh-macos zesh.exe > SHA256SUMS
+
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: ${{ github.ref }}
+          name: Zesh v${{ env.VERSION }}
+          body: ${{ env.RELEASE_NOTES }}
+          draft: false
+          prerelease: false
+          files: |
+            release-binaries/zesh
+            release-binaries/zesh-macos
+            release-binaries/SHA256SUMS
+
+  # publish_aur:
+  #   name: Publish to AUR
+  #   needs: create_release
+  #   runs-on: ubuntu-latest
+  #   container: archlinux:base-devel
+  #   steps:
+  #     - name: Install git and ssh
+  #       run: |
+  #         pacman -Syu --noconfirm git openssh curl
+  #
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #       
+  #     - name: Extract version from tag
+  #       run: echo "VERSION=${GITHUB_REF#refs/tags/zesh-v}" >> $GITHUB_ENV
+  #       
+  #     - name: Create build user
+  #       run: |
+  #         useradd -m builder
+  #         echo "builder ALL=(ALL) NOPASSWD: ALL" >> /etc/sudoers
+  #         
+  #     - name: Setup SSH key for AUR
+  #       uses: shimataro/ssh-key-action@v2
+  #       with:
+  #         key: ${{ secrets.AUR_SSH_PRIVATE_KEY }}
+  #         known_hosts: ${{ secrets.AUR_KNOWN_HOSTS }}
+  #         name: id_rsa_aur
+  #         
+  #     - name: Clone AUR package
+  #       run: |
+  #         mkdir -p /home/builder/.ssh
+  #         cp ~/.ssh/id_rsa_aur /home/builder/.ssh/id_rsa
+  #         chmod 600 /home/builder/.ssh/id_rsa
+  #         cp ~/.ssh/known_hosts /home/builder/.ssh/
+  #         chown -R builder:builder /home/builder/.ssh
+  #         
+  #         su - builder -c "git clone ssh://aur@aur.archlinux.org/zesh.git ~/aur-package"
+  #
+  #     - name: Update PKGBUILD
+  #       run: |
+  #         VERSION="${{ env.VERSION }}"
+  #         cd /home/builder/aur-package
+  #         
+  #         # Update version in PKGBUILD
+  #         sed -i "s/^pkgver=.*/pkgver=$VERSION/" PKGBUILD
+  #         
+  #         # Download source tarball
+  #         su - builder -c "cd ~/aur-package && curl -sL \"https://github.com/roberte777/zesh/archive/refs/tags/zesh-v$VERSION.tar.gz\" -o \"zesh-$VERSION.tar.gz\""
+  #         
+  #         # Update checksums
+  #         CHECKSUM=$(sha256sum "/home/builder/aur-package/zesh-$VERSION.tar.gz" | awk '{print $1}')
+  #         su - builder -c "cd ~/aur-package && sed -i \"s/^sha256sums=.*/sha256sums=('$CHECKSUM')/\" PKGBUILD"
+  #         
+  #         # Update .SRCINFO
+  #         su - builder -c "cd ~/aur-package && makepkg --printsrcinfo > .SRCINFO"
+  #         
+  #     - name: Commit and push to AUR
+  #       run: |
+  #         cd /home/builder/aur-package
+  #         su - builder -c "cd ~/aur-package && git config user.name \"GitHub Action\""
+  #         su - builder -c "cd ~/aur-package && git config user.email \"action@github.com\""
+  #         su - builder -c "cd ~/aur-package && git add PKGBUILD .SRCINFO"
+  #         su - builder -c "cd ~/aur-package && git commit -m \"Update to version ${{ env.VERSION }}\""
+  #         su - builder -c "cd ~/aur-package && git push"
+
+  # publish_homebrew:
+  #   name: Publish to Homebrew
+  #   needs: create_release
+  #   runs-on: ubuntu-latest
+  #   steps:
+  #     - name: Checkout code
+  #       uses: actions/checkout@v4
+  #       
+  #     - name: Extract version from tag
+  #       run: echo "VERSION=${GITHUB_REF#refs/tags/zesh-v}" >> $GITHUB_ENV
+  #       
+  #     - name: Set up Homebrew tap
+  #       uses: actions/checkout@v4
+  #       with:
+  #         repository: roberte777/homebrew-zesh
+  #         path: homebrew-zesh
+  #         token: ${{ secrets.GH_PERSONAL_ACCESS_TOKEN }}
+  #         
+  #     - name: Download release assets and calculate checksums
+  #       run: |
+  #         mkdir -p downloads
+  #         
+  #         # Download the binaries
+  #         curl -sL "https://github.com/roberte777/zesh/releases/download/${{ github.ref_name }}/zesh" -o downloads/zesh-linux
+  #         curl -sL "https://github.com/roberte777/zesh/releases/download/${{ github.ref_name }}/zesh-macos" -o downloads/zesh-macos
+  #         
+  #         # Calculate SHA256 checksums
+  #         LINUX_SHA=$(sha256sum downloads/zesh-linux | cut -d ' ' -f 1)
+  #         MACOS_SHA=$(sha256sum downloads/zesh-macos | cut -d ' ' -f 1)
+  #         
+  #         echo "LINUX_SHA=$LINUX_SHA" >> $GITHUB_ENV
+  #         echo "MACOS_SHA=$MACOS_SHA" >> $GITHUB_ENV
+  #         
+  #     - name: Update Homebrew formula
+  #       working-directory: homebrew-zesh
+  #       run: |
+  #         cat > Formula/zesh.rb << EOF
+  #         class Zesh < Formula
+  #           desc "A zellij session manager with zoxide integration"
+  #           homepage "https://github.com/roberte777/zesh"
+  #           version "${{ env.VERSION }}"
+  #           license "MIT"
+  #           
+  #           on_macos do
+  #             url "https://github.com/roberte777/zesh/releases/download/${{ github.ref_name }}/zesh-macos"
+  #             sha256 "${{ env.MACOS_SHA }}"
+  #           end
+  #           
+  #           on_linux do
+  #             url "https://github.com/roberte777/zesh/releases/download/${{ github.ref_name }}/zesh"
+  #             sha256 "${{ env.LINUX_SHA }}"
+  #           end
+  #           
+  #           depends_on "zellij"
+  #           depends_on "zoxide"
+  #           
+  #           def install
+  #             if OS.mac?
+  #               bin.install "zesh-macos" => "zesh"
+  #             else
+  #               bin.install "zesh"
+  #             end
+  #           end
+  #           
+  #           test do
+  #             system "#{bin}/zesh", "--version"
+  #           end
+  #         end
+  #         EOF
+  #         
+  #     - name: Commit and push Homebrew formula
+  #       working-directory: homebrew-zesh
+  #       run: |
+  #         git config user.name "GitHub Action"
+  #         git config user.email "action@github.com"
+  #         git add Formula/zesh.rb
+  #         git commit -m "Update zesh to version ${{ env.VERSION }}"
+  #         git push
