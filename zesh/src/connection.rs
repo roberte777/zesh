@@ -129,7 +129,8 @@ where
         query: &str,
         options: &ZellijOptions,
     ) -> Result<(), ConnectError> {
-        let entries = self.zoxide.query(&[query])?;
+        let parts = query.split(" ").collect::<Vec<&str>>();
+        let entries = self.zoxide.query(&parts)?;
 
         if entries.is_empty() {
             return Err(ConnectError::NoMatch(query.to_string()));

@@ -31,7 +31,7 @@ enum Commands {
     #[clap(visible_alias = "cn")]
     Connect {
         /// Session name or part of path
-        name: String,
+        name: Vec<String>,
         #[clap(flatten)]
         zellij_options: ZellijOptions,
     },
@@ -97,8 +97,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             name,
             zellij_options,
         } => {
+            let name = name.join(" ");
             // Use our new connect service
-            if let Err(e) = connect_service.connect(name, zellij_options) {
+            if let Err(e) = connect_service.connect(&name, zellij_options) {
                 eprintln!("Error connecting to '{}': {}", name, e);
                 return Err(e.into());
             }
