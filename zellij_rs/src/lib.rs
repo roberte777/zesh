@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 use std::collections::HashMap;
-use std::io::{Read, stdout};
+use std::io::Read;
 use std::process::{Command, Stdio};
 use std::str;
 pub mod options;

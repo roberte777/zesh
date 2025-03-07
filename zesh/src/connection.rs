@@ -1023,7 +1023,7 @@ mod tests {
 
         // Create options with debug enabled
         let options = ZellijOptions {
-            layout: None,
+            new_session_with_layout: None,
             config: None,
             config_dir: None,
             data_dir: None,
@@ -1059,7 +1059,7 @@ mod tests {
 
         // Create options with custom config
         let options = ZellijOptions {
-            layout: None,
+            new_session_with_layout: None,
             config: Some("custom-config.yaml".to_string()),
             config_dir: None,
             data_dir: None,
