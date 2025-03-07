@@ -16,7 +16,7 @@ pub struct ZellijOptions {
     pub config_dir: Option<String>,
 
     /// Path to data directory for plugins
-    #[arg(short, long)]
+    #[arg(short = 'D', long)]
     pub data_dir: Option<String>,
 
     /// Maximum panes on screen

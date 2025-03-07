@@ -26,7 +26,8 @@ enum Commands {
     #[clap(visible_alias = "l")]
     List,
 
-    /// Connect to the given session
+    /// Connect to the given session. Zellij arguments are only passed if
+    /// creating a new session
     #[clap(visible_alias = "cn")]
     Connect {
         /// Session name or part of path
@@ -98,8 +99,8 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         } => {
             // Use our new connect service
             if let Err(e) = connect_service.connect(name, zellij_options) {
-                // eprintln!("Error connecting to '{}': {}", name, e);
-                // return Err(e.into());
+                eprintln!("Error connecting to '{}': {}", name, e);
+                return Err(e.into());
             }
         }
 
