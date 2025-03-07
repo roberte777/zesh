@@ -32,7 +32,7 @@ jobs:
         run: cargo build --release
       
       - name: Upload artifact
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.asset_name }}
           path: target/release/${{ matrix.artifact_name }}
@@ -80,7 +80,7 @@ jobs:
           echo "EOF" >> $GITHUB_ENV
 
       - name: Download all artifacts
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           path: artifacts
 
@@ -96,7 +96,7 @@ jobs:
           
           # Generate checksums
           cd release-binaries
-          sha256sum zesh zesh-macos zesh.exe > SHA256SUMS
+          sha256sum zesh zesh-macos > SHA256SUMS
 
       - name: Create Release
         id: create_release
