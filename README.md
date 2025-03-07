@@ -13,6 +13,9 @@ by Josh Medeski.
 
 ## 🛠️ Installation
 
+Currently, ths project can be installed with cargo, or the binaries can be found
+directly in the [GitHub releases](https://github.com/roberte777/zesh/releases).
+
 ```bash
 cargo install --locked zesh
 ```
