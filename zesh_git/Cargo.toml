@@ -2,6 +2,9 @@
 name = "zesh_git"
 version = "0.1.0"
 edition = "2024"
+license = "MIT"
+description = "Package to provide git functionality to zesh"
+repository = "https://github.com/roberte777/zesh"
 
 [dependencies]
 thiserror = "2.0.12"
