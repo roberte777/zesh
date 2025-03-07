@@ -44,11 +44,11 @@ zesh cn $(zesh l | fzf)
 zesh clone https://github.com/username/repo
 zesh cl https://github.com/username/repo
 
-# 📂 Show the root directory of the current session
+# 📂 Show the root directory of the current session (WIP)
 zesh root
 zesh r
 
-# 👁️ Preview a session or directory
+# 👁️ Preview a session or directory (WIP)
 zesh preview <name>
 zesh p <name>
 
