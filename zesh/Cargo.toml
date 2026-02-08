@@ -10,6 +10,9 @@ readme="../README.md"
 [dependencies]
 anyhow = "1.0.97"
 clap = { version = "4.4", features = ["derive"] }
+dirs = "6"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
 thiserror = "1.0"
 zellij_rs = { path = "../zellij_rs", version = "0.3.0"}
 zox_rs = { path = "../zox_rs", version = "0.2.0"}
