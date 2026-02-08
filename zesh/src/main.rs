@@ -2,7 +2,6 @@ use clap::{Parser, Subcommand};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use zellij_rs::options::ZellijOptions;
 use zesh::connection::ConnectService;
 use zesh::fs::RealFs;
@@ -49,9 +48,14 @@ enum Commands {
         /// Optional path to clone into (defaults to current directory)
         #[clap(long)]
         path: Option<PathBuf>,
+
         /// Zellij options
         #[clap(flatten)]
         zellij_options: ZellijOptions,
+
+        /// Extra arguments passed to git clone (after --)
+        #[clap(last = true)]
+        git_args: Vec<String>,
     },
 
     /// Show the root directory from the active session
@@ -109,6 +113,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             name,
             path,
             zellij_options,
+            git_args,
         } => {
             // Determine the repo name from URL
             let repo_name = extract_repo_name(repo_url)?;
@@ -121,34 +126,20 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 env::current_dir()?.join(repo_name)
             };
 
-            // Clone the repository
             println!("Cloning {} into {}...", repo_url, clone_path.display());
-            let git_output = Command::new("git")
-                .arg("clone")
-                .arg(repo_url)
-                .arg(&clone_path)
-                .output()?;
 
-            if !git_output.status.success() {
-                let error = String::from_utf8_lossy(&git_output.stderr);
-                println!("Git clone failed: {}", error);
-                return Ok(());
+            if let Err(e) =
+                connect_service.clone_and_connect(repo_url, session_name, &clone_path, git_args, zellij_options)
+            {
+                eprintln!("Clone failed: {}", e);
+                return Err(e.into());
             }
 
             println!(
-                "Creating new session '{}' at {}",
+                "Created session '{}' at {}",
                 session_name,
                 clone_path.display()
             );
-
-            // Change to the cloned directory
-            env::set_current_dir(&clone_path)?;
-
-            // Create new session
-            zellij.new_session(session_name, zellij_options)?;
-
-            // Add to zoxide database
-            zoxide.add(&clone_path)?;
         }
 
         Commands::Root => {

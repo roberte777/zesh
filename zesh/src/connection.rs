@@ -160,6 +160,33 @@ where
         Ok(())
     }
 
+    /// Clone a git repository, create a new session in it, and add it to zoxide.
+    pub fn clone_and_connect(
+        &self,
+        url: &str,
+        session_name: &str,
+        clone_path: &Path,
+        extra_args: &[String],
+        options: &ZellijOptions,
+    ) -> Result<(), ConnectError> {
+        let cmd_dir = clone_path
+            .parent()
+            .unwrap_or(Path::new("."))
+            .to_str()
+            .ok_or_else(|| ConnectError::Other("Invalid parent path".to_string()))?;
+        let dir = clone_path
+            .to_str()
+            .ok_or_else(|| ConnectError::Other("Invalid clone path".to_string()))?;
+
+        self.git.clone(url, cmd_dir, dir, extra_args)?;
+
+        self.fs.set_current_dir(clone_path)?;
+        self.zellij.new_session(session_name, options)?;
+        self.zoxide.add(clone_path)?;
+
+        Ok(())
+    }
+
     /// Get a list of active sessions
     pub fn list_sessions(&self) -> Result<Vec<Session>, ConnectError> {
         Ok(self.zellij.list_sessions()?)
@@ -910,7 +937,13 @@ mod tests {
             Ok((self.is_git_repo, "/mock/repo/common-dir".to_string()))
         }
 
-        fn clone(&self, _url: &str, _cmd_dir: &str, _dir: &str) -> Result<String, GitError> {
+        fn clone(
+            &self,
+            _url: &str,
+            _cmd_dir: &str,
+            _dir: &str,
+            _extra_args: &[String],
+        ) -> Result<String, GitError> {
             Ok("Mock clone successful".to_string())
         }
     }
@@ -1076,5 +1109,99 @@ mod tests {
         assert_eq!(sessions.len(), 1);
         assert_eq!(sessions[0].name, "zoxide-dir");
         assert!(sessions[0].is_current);
+    }
+
+    #[test]
+    fn test_clone_and_connect_basic() {
+        let service = create_service(None, None, None);
+
+        let clone_path = PathBuf::from("/mock/my-repo");
+        let result = service.clone_and_connect(
+            "https://github.com/user/my-repo.git",
+            "my-repo",
+            &clone_path,
+            &[],
+            &ZellijOptions::default(),
+        );
+        assert!(result.is_ok());
+
+        // Session should be created
+        let sessions = service.list_sessions().unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].name, "my-repo");
+        assert!(sessions[0].is_current);
+    }
+
+    #[test]
+    fn test_clone_and_connect_with_extra_args() {
+        let service = create_service(None, None, None);
+
+        let clone_path = PathBuf::from("/mock/my-repo");
+        let extra_args = vec![
+            "--depth".to_string(),
+            "1".to_string(),
+            "--branch".to_string(),
+            "main".to_string(),
+        ];
+        let result = service.clone_and_connect(
+            "https://github.com/user/my-repo.git",
+            "my-repo",
+            &clone_path,
+            &extra_args,
+            &ZellijOptions::default(),
+        );
+        assert!(result.is_ok());
+
+        let sessions = service.list_sessions().unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].name, "my-repo");
+    }
+
+    #[test]
+    fn test_clone_and_connect_git_failure() {
+        // Use a TestGit that fails on clone
+        struct FailingCloneGit;
+        impl Git for FailingCloneGit {
+            fn show_top_level(&self, _name: &str) -> Result<(bool, String), GitError> {
+                Ok((false, String::new()))
+            }
+            fn git_common_dir(&self, _name: &str) -> Result<(bool, String), GitError> {
+                Ok((false, String::new()))
+            }
+            fn clone(
+                &self,
+                _url: &str,
+                _cmd_dir: &str,
+                _dir: &str,
+                _extra_args: &[String],
+            ) -> Result<String, GitError> {
+                Err(GitError::CommandError("remote not found".to_string()))
+            }
+        }
+
+        let service = ConnectService::new(
+            MockZellijClient::new(),
+            MockZoxideClient::new(),
+            MockFs::new(),
+            FailingCloneGit,
+        );
+
+        let result = service.clone_and_connect(
+            "https://github.com/user/bad-repo.git",
+            "bad-repo",
+            &PathBuf::from("/mock/bad-repo"),
+            &[],
+            &ZellijOptions::default(),
+        );
+        assert!(result.is_err());
+        if let Err(ConnectError::Git(_)) = result {
+            // Expected
+        } else {
+            panic!("Expected ConnectError::Git");
+        }
+
+        // No sessions should be created
+        let sessions = service.list_sessions().unwrap();
+        assert!(sessions.is_empty());
     }
 }

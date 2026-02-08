@@ -23,8 +23,16 @@ pub trait Git {
     fn git_common_dir(&self, name: &str) -> Result<(bool, String), GitError>;
 
     /// Runs `git clone <url> <dir>` in the given command directory.
+    /// Extra arguments (e.g. `["--depth", "1", "--branch", "main"]`) are
+    /// inserted before the positional `<url>` argument.
     /// Returns the output string on success.
-    fn clone(&self, url: &str, cmd_dir: &str, dir: &str) -> Result<String, GitError>;
+    fn clone(
+        &self,
+        url: &str,
+        cmd_dir: &str,
+        dir: &str,
+        extra_args: &[String],
+    ) -> Result<String, GitError>;
 }
 
 /// A real implementation of the Git trait that calls the actual git commands.
@@ -57,9 +65,20 @@ impl Git for RealGit {
         }
     }
 
-    fn clone(&self, url: &str, cmd_dir: &str, dir: &str) -> Result<String, GitError> {
+    fn clone(
+        &self,
+        url: &str,
+        cmd_dir: &str,
+        dir: &str,
+        extra_args: &[String],
+    ) -> Result<String, GitError> {
+        let mut args = vec!["clone".to_string()];
+        args.extend(extra_args.iter().cloned());
+        args.push(url.to_string());
+        args.push(dir.to_string());
+
         let output = Command::new("git")
-            .args(["clone", url, dir])
+            .args(&args)
             .current_dir(cmd_dir)
             .output()?;
         if output.status.success() {
@@ -86,7 +105,13 @@ impl Git for MockGit {
         Ok((true, String::from("/mock/repo/common-dir")))
     }
 
-    fn clone(&self, _url: &str, _cmd_dir: &str, _dir: &str) -> Result<String, GitError> {
+    fn clone(
+        &self,
+        _url: &str,
+        _cmd_dir: &str,
+        _dir: &str,
+        _extra_args: &[String],
+    ) -> Result<String, GitError> {
         // Always return a success message.
         Ok(String::from("Mock clone successful"))
     }
@@ -109,7 +134,7 @@ mod tests {
         assert_eq!(common_dir, "/mock/repo/common-dir");
 
         let clone_output = git
-            .clone("https://example.com/repo.git", ".", "repo")
+            .clone("https://example.com/repo.git", ".", "repo", &[])
             .unwrap();
         assert_eq!(clone_output, "Mock clone successful");
     }
