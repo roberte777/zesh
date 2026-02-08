@@ -1,4 +1,6 @@
 use clap::{Parser, Subcommand};
+use serde::Serialize;
+use std::collections::HashSet;
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
@@ -24,7 +26,27 @@ struct Cli {
 enum Commands {
     /// List sessions
     #[clap(visible_alias = "l")]
-    List,
+    List {
+        /// Show only zellij sessions
+        #[clap(short = 'Z', long)]
+        zesh: bool,
+
+        /// Show only zoxide results
+        #[clap(short, long)]
+        zoxide: bool,
+
+        /// Output as JSON
+        #[clap(short, long)]
+        json: bool,
+
+        /// Hide the currently attached zellij session
+        #[clap(short = 'H', long)]
+        hide_attached: bool,
+
+        /// Hide duplicate entries (by name)
+        #[clap(short = 'd', long)]
+        hide_duplicates: bool,
+    },
 
     /// Connect to the given session. Zellij arguments are only passed if
     /// creating a new session
@@ -66,6 +88,31 @@ enum Commands {
     },
 }
 
+/// A list entry for output (used for both display and JSON serialization)
+#[derive(Debug, Serialize)]
+struct ListEntry {
+    /// The source of this entry: "zellij" or "zoxide"
+    src: String,
+    /// Display name (session name or shortened path)
+    name: String,
+    /// Absolute path (only for zoxide entries)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    path: Option<String>,
+    /// Zoxide score (only for zoxide entries)
+    #[serde(skip_serializing_if = "Option::is_none")]
+    score: Option<f64>,
+}
+
+/// Shorten a path by replacing the home directory prefix with ~
+fn shorten_home(path: &Path) -> String {
+    if let Some(home) = dirs::home_dir() {
+        if let Ok(suffix) = path.strip_prefix(&home) {
+            return format!("~/{}", suffix.display());
+        }
+    }
+    path.display().to_string()
+}
+
 fn main() -> Result<(), Box<dyn std::error::Error>> {
     let cli = Cli::parse();
     let zellij = ZellijClient::new();
@@ -76,21 +123,64 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let connect_service = ConnectService::new(zellij, zoxide, fs, git);
 
     match &cli.command {
-        Commands::List => {
-            // List all directories from zoxide
-            let entries = zoxide.list()?;
-            for entry in entries {
-                println!("{}", entry.path.display());
-            }
-            // List active zellij sessions
-            let sessions = zellij.list_sessions()?;
+        Commands::List {
+            zesh,
+            zoxide: zoxide_only,
+            json,
+            hide_attached,
+            hide_duplicates,
+        } => {
+            // If no source flags, show all sources. If any source flag is set,
+            // show only the requested sources.
+            let show_all = !zesh && !zoxide_only;
+            let show_zellij = show_all || *zesh;
+            let show_zoxide = show_all || *zoxide_only;
 
-            if sessions.is_empty() {
-                return Ok(());
+            let mut entries: Vec<ListEntry> = Vec::new();
+
+            // Zellij sessions first (matching sesh's default order: sessions before zoxide)
+            if show_zellij {
+                let sessions = zellij.list_sessions()?;
+                for session in &sessions {
+                    if *hide_attached && session.is_current {
+                        continue;
+                    }
+                    entries.push(ListEntry {
+                        src: "zellij".to_string(),
+                        name: session.name.clone(),
+                        path: None,
+                        score: None,
+                    });
+                }
             }
 
-            for session in sessions {
-                println!("{}", session.name,);
+            // Zoxide entries
+            if show_zoxide {
+                let zoxide_entries = zoxide.list()?;
+                for entry in &zoxide_entries {
+                    entries.push(ListEntry {
+                        src: "zoxide".to_string(),
+                        name: shorten_home(&entry.path),
+                        path: Some(entry.path.display().to_string()),
+                        score: Some(entry.score),
+                    });
+                }
+            }
+
+            // Deduplication: remove entries with duplicate names
+            if *hide_duplicates {
+                let mut seen = HashSet::new();
+                entries.retain(|e| seen.insert(e.name.clone()));
+            }
+
+            // Output
+            if *json {
+                let json_str = serde_json::to_string(&entries)?;
+                println!("{}", json_str);
+            } else {
+                for entry in &entries {
+                    println!("{}", entry.name);
+                }
             }
         }
         Commands::Connect {
