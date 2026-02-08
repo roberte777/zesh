@@ -28,6 +28,7 @@ pub trait Git {
 }
 
 /// A real implementation of the Git trait that calls the actual git commands.
+#[derive(Copy, Clone)]
 pub struct RealGit;
 
 impl Git for RealGit {
