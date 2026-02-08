@@ -92,25 +92,3 @@ impl Git for MockGit {
     }
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_mock_git() {
-        let git = MockGit;
-
-        let (success, top_level) = git.show_top_level("any_dir").unwrap();
-        assert!(success);
-        assert_eq!(top_level, "/mock/repo/top-level");
-
-        let (success, common_dir) = git.git_common_dir("any_dir").unwrap();
-        assert!(success);
-        assert_eq!(common_dir, "/mock/repo/common-dir");
-
-        let clone_output = git
-            .clone("https://example.com/repo.git", ".", "repo")
-            .unwrap();
-        assert_eq!(clone_output, "Mock clone successful");
-    }
-}

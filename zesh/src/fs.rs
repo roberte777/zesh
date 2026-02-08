@@ -194,31 +194,6 @@ pub mod tests {
     }
 
     #[test]
-    fn test_mock_fs() {
-        let mock_fs = MockFs::new();
-
-        // Test directory
-        let dir_path = PathBuf::from("/mock/project");
-        mock_fs.with_directory(&dir_path, "project");
-
-        assert!(mock_fs.exists(&dir_path));
-        assert!(mock_fs.is_dir(&dir_path));
-        assert_eq!(mock_fs.get_dir_name(&dir_path).unwrap(), "project");
-
-        // Test file
-        let file_path = PathBuf::from("/mock/file.txt");
-        mock_fs.with_file(&file_path);
-
-        assert!(mock_fs.exists(&file_path));
-        assert!(!mock_fs.is_dir(&file_path));
-
-        // Test current dir
-        let new_dir = PathBuf::from("/mock/workspace");
-        mock_fs.set_current_dir(&new_dir).unwrap();
-        assert_eq!(mock_fs.current_dir().unwrap(), new_dir);
-    }
-
-    #[test]
     fn test_validate_dir_path() {
         let mock_fs = MockFs::new();
         let dir_path = PathBuf::from("/mock/valid-dir");
