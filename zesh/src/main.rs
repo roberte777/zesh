@@ -115,31 +115,30 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             zellij_options,
             git_args,
         } => {
-            // Determine the repo name from URL
             let repo_name = extract_repo_name(repo_url)?;
             let session_name = name.as_deref().unwrap_or(repo_name);
 
-            // Determine clone path
-            let clone_path = if let Some(p) = path {
-                p.join(repo_name)
-            } else {
-                env::current_dir()?.join(repo_name)
+            // cmd_dir = --path value or empty (let clone_and_connect use cwd)
+            let cmd_dir = match path {
+                Some(p) => p.display().to_string(),
+                None => String::new(),
             };
 
-            println!("Cloning {} into {}...", repo_url, clone_path.display());
+            println!("Cloning {}...", repo_url);
 
-            if let Err(e) =
-                connect_service.clone_and_connect(repo_url, session_name, &clone_path, git_args, zellij_options)
-            {
+            if let Err(e) = connect_service.clone_and_connect(
+                repo_url,
+                session_name,
+                &cmd_dir,
+                repo_name,
+                git_args,
+                zellij_options,
+            ) {
                 eprintln!("Clone failed: {}", e);
                 return Err(e.into());
             }
 
-            println!(
-                "Created session '{}' at {}",
-                session_name,
-                clone_path.display()
-            );
+            println!("Created session '{}'", session_name);
         }
 
         Commands::Root => {

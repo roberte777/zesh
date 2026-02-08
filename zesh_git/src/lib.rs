@@ -22,10 +22,13 @@ pub trait Git {
     /// and the second element is either the common directory path or the error output.
     fn git_common_dir(&self, name: &str) -> Result<(bool, String), GitError>;
 
-    /// Runs `git clone <url> <dir>` in the given command directory.
-    /// Extra arguments (e.g. `["--depth", "1", "--branch", "main"]`) are
-    /// inserted before the positional `<url>` argument.
-    /// Returns the output string on success.
+    /// Runs `git clone`.
+    ///
+    /// * `url`        – repository URL
+    /// * `cmd_dir`    – directory to run git in (empty ⇒ inherit cwd)
+    /// * `dir`        – target directory name git creates (empty ⇒ git picks from URL)
+    /// * `extra_args` – extra flags inserted before the positional args
+    ///                   (e.g. `["--depth", "1", "--branch", "main"]`)
     fn clone(
         &self,
         url: &str,
@@ -72,14 +75,20 @@ impl Git for RealGit {
         dir: &str,
         extra_args: &[String],
     ) -> Result<String, GitError> {
-        let mut args = vec!["clone".to_string()];
+        let mut args: Vec<String> = Vec::new();
+        if !cmd_dir.is_empty() {
+            args.push("-C".to_string());
+            args.push(cmd_dir.to_string());
+        }
+        args.push("clone".to_string());
         args.extend(extra_args.iter().cloned());
         args.push(url.to_string());
-        args.push(dir.to_string());
+        if !dir.is_empty() {
+            args.push(dir.to_string());
+        }
 
         let output = Command::new("git")
             .args(&args)
-            .current_dir(cmd_dir)
             .output()?;
         if output.status.success() {
             let stdout = String::from_utf8_lossy(&output.stdout).trim().to_string();

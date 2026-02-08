@@ -161,28 +161,43 @@ where
     }
 
     /// Clone a git repository, create a new session in it, and add it to zoxide.
+    ///
+    /// * `cmd_dir`    – directory to run git in (empty ⇒ cwd)
+    /// * `dir`        – target directory name git creates (empty ⇒ derived from URL)
     pub fn clone_and_connect(
         &self,
         url: &str,
         session_name: &str,
-        clone_path: &Path,
+        cmd_dir: &str,
+        dir: &str,
         extra_args: &[String],
         options: &ZellijOptions,
     ) -> Result<(), ConnectError> {
-        let cmd_dir = clone_path
-            .parent()
-            .unwrap_or(Path::new("."))
-            .to_str()
-            .ok_or_else(|| ConnectError::Other("Invalid parent path".to_string()))?;
-        let dir = clone_path
-            .to_str()
-            .ok_or_else(|| ConnectError::Other("Invalid clone path".to_string()))?;
-
         self.git.clone(url, cmd_dir, dir, extra_args)?;
 
-        self.fs.set_current_dir(clone_path)?;
+        // Resolve the final path the same way sesh does:
+        //   base = cmd_dir if non-empty, else cwd
+        //   path = base / dir
+        let base = if cmd_dir.is_empty() {
+            self.fs.current_dir()?
+        } else {
+            PathBuf::from(cmd_dir)
+        };
+        let clone_path = if dir.is_empty() {
+            // git derived the name from the URL; mirror that logic here
+            let repo_name = url
+                .trim_end_matches(".git")
+                .rsplit('/')
+                .next()
+                .ok_or_else(|| ConnectError::Other("Cannot parse repo name from URL".to_string()))?;
+            base.join(repo_name)
+        } else {
+            base.join(dir)
+        };
+
+        self.fs.set_current_dir(&clone_path)?;
         self.zellij.new_session(session_name, options)?;
-        self.zoxide.add(clone_path)?;
+        self.zoxide.add(&clone_path)?;
 
         Ok(())
     }
@@ -1115,11 +1130,11 @@ mod tests {
     fn test_clone_and_connect_basic() {
         let service = create_service(None, None, None);
 
-        let clone_path = PathBuf::from("/mock/my-repo");
         let result = service.clone_and_connect(
             "https://github.com/user/my-repo.git",
             "my-repo",
-            &clone_path,
+            "/mock",
+            "my-repo",
             &[],
             &ZellijOptions::default(),
         );
@@ -1133,10 +1148,49 @@ mod tests {
     }
 
     #[test]
+    fn test_clone_and_connect_empty_cmd_dir() {
+        let service = create_service(None, None, None);
+
+        // Empty cmd_dir means clone_and_connect resolves via fs.current_dir()
+        let result = service.clone_and_connect(
+            "https://github.com/user/my-repo.git",
+            "my-repo",
+            "",
+            "my-repo",
+            &[],
+            &ZellijOptions::default(),
+        );
+        assert!(result.is_ok());
+
+        let sessions = service.list_sessions().unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].name, "my-repo");
+    }
+
+    #[test]
+    fn test_clone_and_connect_empty_dir() {
+        let service = create_service(None, None, None);
+
+        // Empty dir means repo name is derived from the URL
+        let result = service.clone_and_connect(
+            "https://github.com/user/my-repo.git",
+            "my-repo",
+            "/mock",
+            "",
+            &[],
+            &ZellijOptions::default(),
+        );
+        assert!(result.is_ok());
+
+        let sessions = service.list_sessions().unwrap();
+        assert_eq!(sessions.len(), 1);
+        assert_eq!(sessions[0].name, "my-repo");
+    }
+
+    #[test]
     fn test_clone_and_connect_with_extra_args() {
         let service = create_service(None, None, None);
 
-        let clone_path = PathBuf::from("/mock/my-repo");
         let extra_args = vec![
             "--depth".to_string(),
             "1".to_string(),
@@ -1146,7 +1200,8 @@ mod tests {
         let result = service.clone_and_connect(
             "https://github.com/user/my-repo.git",
             "my-repo",
-            &clone_path,
+            "/mock",
+            "my-repo",
             &extra_args,
             &ZellijOptions::default(),
         );
@@ -1189,7 +1244,8 @@ mod tests {
         let result = service.clone_and_connect(
             "https://github.com/user/bad-repo.git",
             "bad-repo",
-            &PathBuf::from("/mock/bad-repo"),
+            "/mock",
+            "bad-repo",
             &[],
             &ZellijOptions::default(),
         );
