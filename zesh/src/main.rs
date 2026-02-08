@@ -2,8 +2,8 @@ use clap::{Parser, Subcommand};
 use std::env;
 use std::fs;
 use std::path::{Path, PathBuf};
-use std::process::Command;
 use zellij_rs::options::ZellijOptions;
+use zesh::clone::CloneService;
 use zesh::connection::ConnectService;
 use zesh::fs::RealFs;
 use zesh_git::RealGit;
@@ -110,45 +110,16 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             path,
             zellij_options,
         } => {
-            // Determine the repo name from URL
-            let repo_name = extract_repo_name(repo_url)?;
-            let session_name = name.as_deref().unwrap_or(repo_name);
-
-            // Determine clone path
-            let clone_path = if let Some(p) = path {
-                p.join(repo_name)
-            } else {
-                env::current_dir()?.join(repo_name)
-            };
-
-            // Clone the repository
-            println!("Cloning {} into {}...", repo_url, clone_path.display());
-            let git_output = Command::new("git")
-                .arg("clone")
-                .arg(repo_url)
-                .arg(&clone_path)
-                .output()?;
-
-            if !git_output.status.success() {
-                let error = String::from_utf8_lossy(&git_output.stderr);
-                println!("Git clone failed: {}", error);
-                return Ok(());
+            let clone_service = CloneService::new(zellij, zoxide, fs, git);
+            if let Err(e) = clone_service.clone_repo(
+                repo_url,
+                name.as_deref(),
+                path.as_ref(),
+                zellij_options,
+            ) {
+                eprintln!("Clone failed: {}", e);
+                return Err(e.into());
             }
-
-            println!(
-                "Creating new session '{}' at {}",
-                session_name,
-                clone_path.display()
-            );
-
-            // Change to the cloned directory
-            env::set_current_dir(&clone_path)?;
-
-            // Create new session
-            zellij.new_session(session_name, zellij_options)?;
-
-            // Add to zoxide database
-            zoxide.add(&clone_path)?;
         }
 
         Commands::Root => {
@@ -200,15 +171,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     }
 
     Ok(())
-}
-
-/// Extract repository name from URL
-fn extract_repo_name(url: &str) -> Result<&str, Box<dyn std::error::Error>> {
-    let url = url.trim_end_matches(".git");
-
-    url.rsplit('/')
-        .next()
-        .ok_or_else(|| "Could not parse repository name from URL".into())
 }
 
 /// Preview directory contents
