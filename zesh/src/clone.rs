@@ -68,7 +68,6 @@ where
         let repo_name = extract_repo_name(repo_url)?;
         let session_name = name.unwrap_or(repo_name);
 
-        // Determine the parent directory
         let parent_dir = if let Some(p) = path {
             p.clone()
         } else {
@@ -80,7 +79,6 @@ where
             .to_str()
             .ok_or_else(|| CloneError::InvalidPath(parent_dir.display().to_string()))?;
 
-        // Clone using the git trait abstraction
         println!("Cloning {} into {}...", repo_url, clone_path.display());
         self.git.clone(repo_url, parent_dir_str, repo_name)?;
 
@@ -90,13 +88,10 @@ where
             clone_path.display()
         );
 
-        // Change to the cloned directory
         self.fs.set_current_dir(&clone_path)?;
 
-        // Create new session
         self.zellij.new_session(session_name, zellij_options)?;
 
-        // Add to zoxide database
         self.zoxide.add(&clone_path)?;
 
         Ok(())
@@ -121,7 +116,6 @@ mod tests {
     use zesh_git::GitError;
     use zox_rs::{MockZoxideClient, ZoxideError};
 
-    // Test Git mock for clone tests
     struct TestGit {
         should_fail: bool,
     }
@@ -183,7 +177,6 @@ mod tests {
 
     #[test]
     fn test_extract_repo_name_trailing_slash() {
-        // Trailing slash after stripping .git leaves empty last segment
         let result = extract_repo_name("/");
         assert!(result.is_err());
     }
@@ -239,7 +232,6 @@ mod tests {
 
         assert!(result.is_ok());
 
-        // Verify session was created
         let sessions = service.zellij.list_sessions().unwrap();
         assert_eq!(sessions.len(), 1);
         assert_eq!(sessions[0].name, "my-repo");

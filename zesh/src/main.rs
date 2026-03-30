@@ -167,7 +167,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
                 }
             }
 
-            // Deduplication: remove entries with duplicate names
+            // remove entries with duplicate names
             if *hide_duplicates {
                 let mut seen = HashSet::new();
                 entries.retain(|e| seen.insert(e.name.clone()));
@@ -187,7 +187,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             name,
             zellij_options,
         } => {
-            // Use our new connect service
             if let Err(e) = connect_service.connect(name, zellij_options) {
                 eprintln!("Error connecting to '{}': {}", name, e);
                 return Err(e.into());
@@ -216,7 +215,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
             if let Some(_session) = current {
                 // Assume session name is the directory name
-                // This is a simplification - you might want to store session roots somewhere
                 println!("{}", env::current_dir()?.display());
             } else {
                 println!("No active zellij session");
@@ -224,13 +222,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         }
 
         Commands::Preview { target } => {
-            // First check if it's a session
+            // Check if it's a session
             let sessions = zellij.list_sessions()?;
             let session_match = sessions.iter().find(|s| s.name == *target);
 
             if let Some(session) = session_match {
                 println!("Session: {}", session.name);
-                // In a real implementation, you'd show more details about the session
                 return Ok(());
             }
 
@@ -262,7 +259,6 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 /// Preview directory contents
 fn preview_directory(path: &Path) -> Result<(), Box<dyn std::error::Error>> {
-    // Print a basic directory listing
     let entries = fs::read_dir(path)?;
 
     for entry in entries {

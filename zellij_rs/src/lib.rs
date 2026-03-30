@@ -298,24 +298,12 @@ fn parse_session_list(output: &str) -> ZellijResult<Vec<Session>> {
 
 /// Parse zellij query --tabs JSON output
 fn parse_tabs_json(_json: &str) -> ZellijResult<Vec<Tab>> {
-    // Note: In a real implementation, you'd use serde_json here.
-    // For simplicity, I'm using a simplified representation.
-    // You should add serde and serde_json to your dependencies
-    // and implement a proper JSON parser.
-
-    // This is a placeholder for proper JSON parsing
-    let tabs = Vec::new();
-
-    // In a real implementation, you'd do something like:
-    // let tabs: Vec<Tab> = serde_json::from_str(json)?;
-
-    Ok(tabs)
+    unimplemented!("Not implemented yet");
 }
 
-/// A mock implementation of ZellijOperations for testing
 #[derive(Default)]
 pub struct MockZellijClient {
-    sessions: RefCell<HashMap<String, bool>>, // session_name -> is_current
+    sessions: RefCell<HashMap<String, bool>>,
     tabs: RefCell<Vec<Tab>>,
     current_session: RefCell<Option<String>>,
 }
@@ -502,8 +490,6 @@ impl ZellijOperations for MockZellijClient {
     }
 
     fn run_command(&self, _command: &str, _args: &[&str]) -> ZellijResult<()> {
-        // In a mock, we don't actually run commands
-        // Just pretend it succeeded
         Ok(())
     }
 }

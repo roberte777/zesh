@@ -78,17 +78,14 @@ pub struct MockGit;
 
 impl Git for MockGit {
     fn show_top_level(&self, _name: &str) -> Result<(bool, String), GitError> {
-        // Always return a mocked top-level directory.
         Ok((true, String::from("/mock/repo/top-level")))
     }
 
     fn git_common_dir(&self, _name: &str) -> Result<(bool, String), GitError> {
-        // Always return a mocked common directory.
         Ok((true, String::from("/mock/repo/common-dir")))
     }
 
     fn clone(&self, _url: &str, _cmd_dir: &str, _dir: &str) -> Result<String, GitError> {
-        // Always return a success message.
         Ok(String::from("Mock clone successful"))
     }
 }

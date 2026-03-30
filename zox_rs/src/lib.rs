@@ -96,10 +96,8 @@ impl ZoxideOperations for ZoxideClient {
         let mut cmd = Command::new("zoxide");
         cmd.arg("query");
 
-        // Add --score flag to get scores
         cmd.arg("--score");
 
-        // Add all keywords
         for keyword in keywords {
             cmd.arg(keyword);
         }
@@ -179,8 +177,6 @@ impl ZoxideOperations for MockZoxideClient {
         let path_buf = path.as_ref().to_path_buf();
         let mut paths = self.paths.borrow_mut();
 
-        // If path already exists, increase its score by 1
-        // Otherwise add it with a score of 1
         *paths.entry(path_buf).or_insert(0.0) += 1.0;
 
         Ok(())

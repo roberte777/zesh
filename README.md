@@ -7,7 +7,6 @@ by Josh Medeski.
 
 - List active zellij sessions
 - Create and connect to sessions based on zoxide
-- Zoxide-powered session detection and management
 - Clone git repositories and set up sessions
 
 ## Installation
@@ -69,10 +68,11 @@ concept that made terminal session management so much more enjoyable!
 
 ## AI Usage
 
-I have used AI to write documentation because I am lazy (like this README).
-I have also used AI to do some basic feature work while I was out of town on
-vacation. The code is probably bad and primarily written by me trying to learn
-from how Josh writes code.
+I have used AI to write documentation because I am lazy (like this README). I
+will also use AI for unit tests sometimes. I have used AI to do some basic
+feature work while I was out of town on vacation.
+
+Most of the code is me.
 
 ## License
 

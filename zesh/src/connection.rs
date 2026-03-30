@@ -6,7 +6,6 @@ use crate::fs::{FsError, FsOperations};
 use zellij_rs::{Session, ZellijError, ZellijOperations, options::ZellijOptions};
 use zox_rs::{ZoxideError, ZoxideOperations};
 
-// Update ConnectError to include Git errors
 #[derive(Debug, Error)]
 pub enum ConnectError {
     #[error("Zellij error: {0}")]
@@ -98,26 +97,20 @@ where
     ) -> Result<(), ConnectError> {
         let path = PathBuf::from(dir);
 
-        // Validate and get canonical path
         let (canon_path, _) = self.fs.validate_dir_path(&path)?;
 
-        // Get the session name based on Git repository info
         let session_name = self.get_session_name_for_path(&canon_path)?;
 
-        // Check if session with this name already exists
         let sessions = self.zellij.list_sessions()?;
         let session_match = sessions.iter().find(|s| s.name == session_name);
 
         if let Some(session) = session_match {
-            // If session exists, attach to it
             self.zellij.attach_session(&session.name)?;
         } else {
-            // Otherwise create a new session
             self.fs.set_current_dir(&canon_path)?;
             self.zellij.new_session(&session_name, options)?;
         }
 
-        // Add to zoxide database
         self.zoxide.add(&canon_path)?;
 
         Ok(())
@@ -139,7 +132,6 @@ where
         let best_match = &entries[0];
         let path = &best_match.path;
 
-        // Get the session name based on Git repository info
         let session_name = self.get_session_name_for_path(path)?;
 
         // Check if session with this name already exists
@@ -150,11 +142,9 @@ where
             return Ok(());
         }
 
-        // Create a new session
         self.fs.set_current_dir(path)?;
         self.zellij.new_session(&session_name, options)?;
 
-        // Add to zoxide database
         self.zoxide.add(path)?;
 
         Ok(())
@@ -221,7 +211,6 @@ mod tests {
     use zellij_rs::{MockZellijClient, Session, ZellijError};
     use zox_rs::{MockZoxideClient, ZoxideEntry, ZoxideError};
 
-    // Helper function to create a ConnectService with custom mocks
     fn create_service(
         zellij_sessions: Option<HashMap<String, bool>>,
         zoxide_paths: Option<HashMap<PathBuf, f64>>,
@@ -252,7 +241,6 @@ mod tests {
         ConnectService::new(zellij, zoxide, fs, TestGit::new(false, "./"))
     }
 
-    // Helper function to create a failing zellij client
     struct FailingZellijClient;
     impl ZellijOperations for FailingZellijClient {
         fn list_sessions(&self) -> zellij_rs::ZellijResult<Vec<Session>> {
