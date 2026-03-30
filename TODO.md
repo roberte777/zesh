@@ -2,3 +2,4 @@
 - zesh last
 - shell completions
 - switch vs attach (maybe built in sesson picker is good enough?)
+- finish root command
