@@ -240,4 +240,3 @@ impl ZoxideOperations for MockZoxideClient {
         Ok(result)
     }
 }
-

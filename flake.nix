@@ -30,13 +30,21 @@
         commonArgs = {
           inherit src;
           strictDeps = true;
+          version="0.0.0";
+          pname="zesh_workspace";
         };
 
         cargoArtifacts = craneLib.buildDepsOnly commonArgs;
 
         # Helper to build individual workspace crates
-        buildCrate = pname: craneLib.buildPackage (commonArgs // {
-          inherit cargoArtifacts pname;
+        buildCrate = pname: 
+        let
+            crateInfo = craneLib.crateNameFromCargoToml { cargoToml = ./${pname}/Cargo.toml; };
+        in
+        craneLib.buildPackage (commonArgs // {
+          inherit cargoArtifacts;
+          inherit (crateInfo) version;
+          pname = crateInfo.pname or pname;
           cargoExtraArgs = "--package ${pname}";
         });
       in
@@ -47,9 +55,7 @@
             cargoClippyExtraArgs = "--all-targets -- --deny warnings";
           });
 
-          fmt = craneLib.cargoFmt {
-            inherit src;
-          };
+          fmt = craneLib.cargoFmt commonArgs;
 
           tests = craneLib.cargoNextest (commonArgs // {
             inherit cargoArtifacts;

@@ -5,3 +5,7 @@ members = [
     "zox_rs",
 ]
 resolver = "2"
+
+[workspace.metadata.crane]
+version="0.0.0"
+name="zesh"

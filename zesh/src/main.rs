@@ -105,10 +105,10 @@ struct ListEntry {
 
 /// Shorten a path by replacing the home directory prefix with ~
 fn shorten_home(path: &Path) -> String {
-    if let Some(home) = dirs::home_dir() {
-        if let Ok(suffix) = path.strip_prefix(&home) {
-            return format!("~/{}", suffix.display());
-        }
+    if let Some(home) = dirs::home_dir()
+        && let Ok(suffix) = path.strip_prefix(&home)
+    {
+        return format!("~/{}", suffix.display());
     }
     path.display().to_string()
 }
@@ -201,12 +201,9 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
             zellij_options,
         } => {
             let clone_service = CloneService::new(zellij, zoxide, fs, git);
-            if let Err(e) = clone_service.clone_repo(
-                repo_url,
-                name.as_deref(),
-                path.as_ref(),
-                zellij_options,
-            ) {
+            if let Err(e) =
+                clone_service.clone_repo(repo_url, name.as_deref(), path.as_ref(), zellij_options)
+            {
                 eprintln!("Clone failed: {}", e);
                 return Err(e.into());
             }

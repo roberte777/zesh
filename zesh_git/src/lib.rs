@@ -92,4 +92,3 @@ impl Git for MockGit {
         Ok(String::from("Mock clone successful"))
     }
 }
-

@@ -320,8 +320,7 @@ mod tests {
         }
 
         fn canonicalize(&self, _: &Path) -> Result<PathBuf, FsError> {
-            Err(FsError::Canonicalize(std::io::Error::new(
-                std::io::ErrorKind::Other,
+            Err(FsError::Canonicalize(std::io::Error::other(
                 "Failed to canonicalize",
             )))
         }
@@ -1010,5 +1009,4 @@ mod tests {
         assert_eq!(sessions[0].name, "project_feature");
         assert!(sessions[0].is_current);
     }
-
 }

@@ -378,10 +378,10 @@ impl ZellijOperations for MockZellijClient {
         }
 
         // Mark the current session as not current
-        if let Some(current_session) = self.current_session.borrow().as_ref() {
-            if let Some(session) = sessions.get_mut(current_session) {
-                *session = false;
-            }
+        if let Some(current_session) = self.current_session.borrow().as_ref()
+            && let Some(session) = sessions.get_mut(current_session)
+        {
+            *session = false;
         }
 
         // Mark the new session as current
@@ -397,10 +397,10 @@ impl ZellijOperations for MockZellijClient {
         let mut sessions = self.sessions.borrow_mut();
 
         // Mark the current session as not current
-        if let Some(current_session) = self.current_session.borrow().as_ref() {
-            if let Some(session) = sessions.get_mut(current_session) {
-                *session = false;
-            }
+        if let Some(current_session) = self.current_session.borrow().as_ref()
+            && let Some(session) = sessions.get_mut(current_session)
+        {
+            *session = false;
         }
 
         // Add the new session and mark it as current
@@ -424,10 +424,10 @@ impl ZellijOperations for MockZellijClient {
         sessions.remove(session_name);
 
         // If we removed the current session, set current_session to None
-        if let Some(current) = self.current_session.borrow().as_ref() {
-            if current == session_name {
-                *self.current_session.borrow_mut() = None;
-            }
+        if let Some(current) = self.current_session.borrow().as_ref()
+            && current == session_name
+        {
+            *self.current_session.borrow_mut() = None;
         }
 
         Ok(())
@@ -507,4 +507,3 @@ impl ZellijOperations for MockZellijClient {
         Ok(())
     }
 }
-
