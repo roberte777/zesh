@@ -1,46 +1,76 @@
 {
-  inputs.nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
-  inputs.utils.url = "github:numtide/flake-utils";
-  inputs.naersk.url = "github:nmattia/naersk";
-  inputs.naersk.inputs.nixpkgs.follows = "nixpkgs";
+  inputs = {
+    nixpkgs.url = "github:nixos/nixpkgs/nixpkgs-unstable";
+    fenix = {
+      url = "github:nix-community/fenix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    crane.url = "github:ipetkov/crane";
+    flake-utils.url = "github:numtide/flake-utils";
+  };
 
-  outputs = { self, nixpkgs, utils, naersk }:
-    utils.lib.eachDefaultSystem (system:
+  outputs = { self, nixpkgs, fenix, crane, flake-utils, ... }:
+    flake-utils.lib.eachDefaultSystem (system:
       let
-        pkgs = import nixpkgs {
-          inherit system;
+        pkgs = nixpkgs.legacyPackages.${system};
+
+        toolchain = fenix.packages.${system}.stable.withComponents [
+          "cargo"
+          "clippy"
+          "rust-src"
+          "rust-analyzer"
+          "rustc"
+          "rustfmt"
+        ];
+
+        craneLib = (crane.mkLib pkgs).overrideToolchain toolchain;
+
+        src = craneLib.cleanCargoSource ./.;
+
+        commonArgs = {
+          inherit src;
+          strictDeps = true;
         };
-        naersk-lib = pkgs.callPackage naersk { };
+
+        cargoArtifacts = craneLib.buildDepsOnly commonArgs;
+
+        # Helper to build individual workspace crates
+        buildCrate = pname: craneLib.buildPackage (commonArgs // {
+          inherit cargoArtifacts pname;
+          cargoExtraArgs = "--package ${pname}";
+        });
       in
       {
+        checks = {
+          clippy = craneLib.cargoClippy (commonArgs // {
+            inherit cargoArtifacts;
+            cargoClippyExtraArgs = "--all-targets -- --deny warnings";
+          });
+
+          fmt = craneLib.cargoFmt {
+            inherit src;
+          };
+
+          tests = craneLib.cargoNextest (commonArgs // {
+            inherit cargoArtifacts;
+          });
+        };
+
         packages = {
-          zesh = naersk-lib.buildPackage {
-            src = ./.;
-            pname = "zesh";
-          };
-          zellij_rs = naersk-lib.buildPackage {
-            src = ./.;
-            pname = "zellij_rs";
-          };
-          zesh_git = naersk-lib.buildPackage {
-            src = ./.;
-            pname = "zesh_git";
-          };
-          zox_rs = naersk-lib.buildPackage {
-            src = ./.;
-            pname = "zox_rs";
-          };
+          zesh = buildCrate "zesh";
+          zellij_rs = buildCrate "zellij_rs";
+          zesh_git = buildCrate "zesh_git";
+          zox_rs = buildCrate "zox_rs";
           default = self.packages.${system}.zesh;
         };
 
-        devShells.default = with pkgs; mkShell {
-          buildInputs = [
-            cargo
-            rustc
-            rustfmt
-            pre-commit
-            clippy
+        devShells.default = craneLib.devShell {
+          checks = self.checks.${system};
+
+          packages = with pkgs; [
+            cargo-watch
           ];
         };
-      });
+      }
+    );
 }
